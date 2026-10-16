@@ -1,7 +1,7 @@
 export type Lang = "en" | "hi" | "te";
 export type Category = "hr" | "python" | "java" | "sql" | "web" | "aiml" | "aptitude";
 export type InterviewType = "hr" | "technical" | "aptitude";
-export type Level = "fresher" | "junior" | "mid" | "senior";
+export type Level = "fresher" | "junior" | "mid" | "senior" | "lead";
 
 export interface Question {
   id: string;
@@ -22,12 +22,14 @@ export const LANG_NAMES: Record<Lang, string> = {
 };
 
 export const ROLES: { id: string; label: string; categories: Category[] }[] = [
-  { id: "python", label: "Python Developer", categories: ["python", "sql"] },
+  { id: "fullstack", label: "Full-Stack Developer", categories: ["web", "sql", "java", "python"] },
+  { id: "frontend", label: "Frontend Developer", categories: ["web"] },
   { id: "java", label: "Java Developer", categories: ["java", "sql"] },
-  { id: "web", label: "Web Developer", categories: ["web"] },
-  { id: "data", label: "Data Analyst", categories: ["sql", "python"] },
+  { id: "python", label: "Python Developer", categories: ["python", "sql"] },
   { id: "aiml", label: "AI / ML Engineer", categories: ["aiml", "python"] },
-  { id: "fullstack", label: "Full-Stack Engineer", categories: ["web", "sql", "java", "python"] },
+  { id: "data", label: "Data Analyst", categories: ["sql", "python"] },
+  { id: "cloud", label: "Cloud & DevOps Engineer", categories: ["web", "python"] },
+  { id: "qa", label: "QA & SDET Engineer", categories: ["java", "python", "sql"] },
 ];
 
 export const BANK: Question[] = [

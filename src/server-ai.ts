@@ -93,7 +93,7 @@ export interface GeneratedQuestion {
 
 export interface DocumentAnalysisResponse {
   detectedRole: string;
-  detectedLevel: "fresher" | "junior" | "mid" | "senior";
+  detectedLevel: "fresher" | "junior" | "mid" | "senior" | "lead";
   summary: string;
   requiredSkills: string[];
   candidateSkills: string[];
@@ -456,7 +456,7 @@ function fallbackDocumentAnalysis(
 
   return {
     detectedRole,
-    detectedLevel: (experienceLevel as "fresher" | "junior" | "mid" | "senior") || "fresher",
+    detectedLevel: (experienceLevel as "fresher" | "junior" | "mid" | "senior" | "lead") || "fresher",
     summary: `Candidate profile analyzed for ${detectedRole}. Found alignment on ${candidateSkills.slice(0, 3).join(", ") || "core fundamentals"}. Structured 7-stage automated screening covers background, resume projects, technical foundations, hands-on coding, scenario reasoning, and behavioral competencies.`,
     requiredSkills: requiredSkills.length
       ? requiredSkills

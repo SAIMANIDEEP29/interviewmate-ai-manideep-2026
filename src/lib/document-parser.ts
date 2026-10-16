@@ -9,7 +9,7 @@ export interface ParsedDocument {
 
 export interface DocumentAnalysisResult {
   detectedRole: string;
-  detectedLevel: "fresher" | "junior" | "mid" | "senior";
+  detectedLevel: "fresher" | "junior" | "mid" | "senior" | "lead";
   summary: string;
   requiredSkills: string[];
   candidateSkills: string[];
@@ -145,6 +145,8 @@ export interface SamplePreset {
   title: string;
   role: string;
   description: string;
+  category: "fullstack" | "backend" | "python" | "aiml" | "data" | "cloud" | "qa" | "frontend";
+  tags: string[];
   resumeFileName: string;
   resumeText: string;
   jdText: string;
@@ -155,8 +157,10 @@ export const SAMPLE_PRESETS: SamplePreset[] = [
     id: "fullstack-react-node",
     title: "Full-Stack Software Engineer (React / Node.js)",
     role: "Full-Stack Developer",
+    category: "fullstack",
+    tags: ["React", "Node.js", "TypeScript", "PostgreSQL", "Docker"],
     description:
-      "Matches a Computer Science graduate against an HCLTech Senior Associate Engineer opening.",
+      "Matches a Computer Science graduate against an enterprise Full-Stack Associate opening.",
     resumeFileName: "Aditya_Sharma_Resume.pdf",
     resumeText: `ADITYA SHARMA
 Email: aditya.sharma.dev@gmail.com | Phone: +91 98765 43210 | Bengaluru, India
@@ -206,16 +210,102 @@ Required Qualifications:
 - Strong proficiency in modern JavaScript, TypeScript, React.js, and Node.js.
 - Solid understanding of data structures, algorithms, object-oriented design, and REST APIs.
 - Experience with relational SQL databases and schema design.
-- Familiarity with Git, Docker, and Linux environments.
+- Familiarity with Git, Docker, and Linux environments.`,
+  },
+  {
+    id: "java-backend-spring",
+    title: "Java Backend Engineer (Spring Boot / Microservices)",
+    role: "Java Developer",
+    category: "backend",
+    tags: ["Java", "Spring Boot", "Microservices", "PostgreSQL", "Kafka"],
+    description:
+      "Core enterprise Java backend role covering OOP, Spring Boot, transactions, and REST APIs.",
+    resumeFileName: "Rohan_Kulkarni_Java_Resume.pdf",
+    resumeText: `ROHAN KULKARNI
+Email: rohan.kulkarni.java@gmail.com | Pune, India
+B.Tech in Computer Engineering | CGPA: 8.8/10 (2021 – 2025)
 
-Preferred Skills:
-- Experience with Next.js, GraphQL, Kubernetes, or AWS serverless architectures.
-- Experience with real-time communications (WebSockets).`,
+TECHNICAL SKILLS:
+Languages: Java (8/11/17), SQL, C++
+Frameworks: Spring Boot, Spring Data JPA, Spring Security, Hibernate, JUnit 5, Mockito
+Architecture: RESTful APIs, Microservices, Event-Driven Architecture, Kafka, Docker
+Databases: PostgreSQL, MySQL, Redis
+Tools: Maven, Git, Docker, Postman, SonarQube
+
+PROJECTS:
+1. Distributed Banking Transaction Processing Engine (Java 17, Spring Boot, PostgreSQL, Kafka)
+- Engineered idempotent payment transfer microservice handling 800+ transactions/sec with two-phase commit logic.
+- Built distributed messaging pipeline using Apache Kafka for async transaction notifications and audit trails.
+- Enforced role-based authentication with Spring Security and OAuth2 JWT tokens.
+
+2. Inventory Management Microservices Platform (Spring Boot, Hibernate, Docker)
+- Designed normalized schema with 18 relational tables, indexing critical foreign keys to slash query response times by 60%.
+- Achieved 91% code coverage with comprehensive JUnit 5 and Mockito test suites.`,
+    jdText: `Role: Associate Java Software Engineer
+Company: Global IT & Digital Solutions (Campus Placement)
+Location: Pune / Chennai / Bengaluru
+
+Responsibilities:
+- Build resilient backend microservices using Java 17, Spring Boot, and Hibernate.
+- Write clean, well-tested code following SOLID principles and design patterns.
+- Design database schemas, write complex SQL queries, and optimize query plans in PostgreSQL.
+- Integrate message queues (Kafka / RabbitMQ) for asynchronous workflows.
+- Participate in code reviews, bug fixes, and continuous delivery with Docker and Jenkins.
+
+Requirements:
+- Strong core Java fundamentals (Collections, Multithreading, Streams, Exception Handling).
+- Solid grasp of Spring Boot, Dependency Injection, JPA, and REST API conventions.
+- Strong knowledge of relational SQL databases and ACID transactions.`,
+  },
+  {
+    id: "python-backend-fastapi",
+    title: "Python Software Engineer (FastAPI / Django / SQL)",
+    role: "Python Developer",
+    category: "python",
+    tags: ["Python", "FastAPI", "PostgreSQL", "Redis", "Docker"],
+    description:
+      "Modern Python engineer profile testing async programming, REST APIs, and database design.",
+    resumeFileName: "Ananya_Sen_Python_Resume.pdf",
+    resumeText: `ANANYA SEN
+Email: ananya.sen.python@gmail.com | Kolkata, India
+B.Tech in Information Technology | CGPA: 8.7/10 (2021 – 2025)
+
+TECHNICAL SKILLS:
+Languages: Python 3.11+, SQL, JavaScript
+Frameworks: FastAPI, Django, Flask, SQLAlchemy, Pydantic, Celery
+Databases: PostgreSQL, Redis, MongoDB
+DevOps: Docker, Docker Compose, Git, Linux, GitHub Actions, AWS EC2
+
+PROJECTS:
+1. Asynchronous Task Orchestration Service (FastAPI, Celery, Redis, PostgreSQL)
+- Developed async API server using FastAPI and Celery handling 5,000+ background analytics jobs daily.
+- Implemented connection pooling with SQLAlchemy and Pydantic schema validation.
+- Built rate-limiting middleware using Redis token-bucket algorithm.
+
+2. Healthcare Appointment & Teleconsult Booking System (Django, PostgreSQL, Stripe)
+- Implemented secure REST APIs with JWT authentication, transaction isolation, and database migrations.
+- Configured automated unit and integration tests using Pytest with 88% test coverage.`,
+    jdText: `Role: Python Backend Developer
+Company: Enterprise Digital Engineering Services
+Location: Hyderabad / Bengaluru / Remote
+
+Responsibilities:
+- Develop and maintain scalable REST APIs and microservices using Python and modern web frameworks (FastAPI/Django).
+- Design and optimize relational databases (PostgreSQL) and write efficient ORM / raw SQL queries.
+- Build asynchronous job workers with Celery and Redis.
+- Package and deploy applications using Docker containers.
+
+Requirements:
+- Strong core Python skills (OOP, Generators, Decorators, Concurrency, Asyncio).
+- Experience building RESTful APIs with FastAPI or Django REST Framework.
+- Good understanding of relational databases, indexing, and SQL queries.`,
   },
   {
     id: "aiml-engineer",
     title: "AI & Machine Learning Engineer (Python / PyTorch)",
-    role: "AI/ML Engineer",
+    role: "AI / ML Engineer",
+    category: "aiml",
+    tags: ["Python", "PyTorch", "RAG", "LLMs", "Vector DB"],
     description:
       "Evaluates an AI enthusiast against an Enterprise GenAI & Deep Learning job posting.",
     resumeFileName: "Priya_Nair_AI_Resume.docx",
@@ -245,6 +335,8 @@ Requirements:
     id: "data-analyst",
     title: "Data Analyst & Business Intelligence",
     role: "Data Analyst",
+    category: "data",
+    tags: ["SQL", "Power BI", "Python", "Tableau", "ETL"],
     description: "Tests data modeling, SQL queries, dashboarding, and business analytics skills.",
     resumeFileName: "Rahul_Varma_Data_Resume.pdf",
     resumeText: `RAHUL VARMA
@@ -266,5 +358,132 @@ Responsibilities:
 - Build executive dashboards and visual reports in Power BI and Tableau.
 - Collaborate with business stakeholders to extract actionable metrics and KPIs.
 - Present data-driven recommendations with clear business communication.`,
+  },
+  {
+    id: "cloud-devops-aws",
+    title: "Cloud & DevOps Engineer (AWS / Docker / K8s)",
+    role: "Cloud & DevOps Engineer",
+    category: "cloud",
+    tags: ["AWS", "Docker", "Kubernetes", "CI/CD", "Linux"],
+    description:
+      "Infrastructure, container orchestration, Linux networking, and automated deployment pipelines.",
+    resumeFileName: "Karthik_Raman_DevOps_Resume.pdf",
+    resumeText: `KARTHIK RAMAN
+Email: karthik.devops@gmail.com | Chennai, India
+B.Tech in Computer Science and Engineering | CGPA: 8.5/10 (2021 – 2025)
+
+TECHNICAL SKILLS:
+Cloud: AWS (EC2, S3, VPC, IAM, RDS, EKS, CloudWatch)
+Containers & Orchestration: Docker, Kubernetes, Helm
+CI/CD & Automation: GitHub Actions, Jenkins, Terraform, Bash scripting
+Operating Systems: Linux (Ubuntu, RHEL), Shell scripting, Networking (TCP/IP, DNS, SSL)
+
+PROJECTS:
+1. Multi-Tier Microservices Deployment on AWS EKS (Kubernetes, Helm, Terraform)
+- Authored Terraform IaC provisioning high-availability VPC across 3 Availability Zones.
+- Configured automated rolling deployments with Kubernetes Ingress and cert-manager SSL certificates.
+- Set up Prometheus & Grafana monitoring dashboards tracking pod memory, CPU, and request latency.
+
+2. Automated Zero-Downtime CI/CD Pipeline (GitHub Actions, Docker, AWS)
+- Reduced build and deployment turnaround from 35 minutes to 6 minutes using multi-stage Docker caching.`,
+    jdText: `Role: Associate Cloud & DevOps Engineer
+Company: Cloud Infrastructure Services
+Location: Chennai / Bengaluru / Hyderabad
+
+Responsibilities:
+- Automate provisioning of cloud infrastructure on AWS using Terraform or CloudFormation.
+- Maintain and troubleshoot containerized services running on Docker and Kubernetes.
+- Implement robust CI/CD pipelines for automated testing, container scanning, and zero-downtime deployment.
+- Monitor system health, logs, and performance metrics across enterprise services.
+
+Requirements:
+- Solid understanding of Linux system administration, bash scripting, and networking fundamentals.
+- Hands-on experience with Docker containerization and Kubernetes concepts (Pods, Services, Ingress).
+- Familiarity with AWS core services (VPC, EC2, S3, IAM) and CI/CD tools.`,
+  },
+  {
+    id: "qa-sdet-automation",
+    title: "QA Automation & SDET (Selenium / Pytest / API)",
+    role: "QA & SDET Engineer",
+    category: "qa",
+    tags: ["Selenium", "Pytest", "Java", "API Testing", "Postman"],
+    description:
+      "Software testing methodologies, test automation frameworks, API validation, and bug reporting.",
+    resumeFileName: "Sneha_Patel_QA_Resume.pdf",
+    resumeText: `SNEHA PATEL
+Email: sneha.patel.qa@gmail.com | Ahmedabad, India
+B.Tech in Computer Engineering | CGPA: 8.4/10 (2021 – 2025)
+
+TECHNICAL SKILLS:
+Testing Methodologies: Functional, Regression, Smoke, Sanity, Integration, Performance Testing
+Automation Tools: Selenium WebDriver (Java/Python), Pytest, TestNG, Postman, RestAssured
+Languages: Java, Python, SQL
+CI/CD & Management: Git, Jenkins, Jira, Allure Reporting
+
+PROJECTS:
+1. Automated Regression Suite for Financial Web Portal (Selenium, Java, TestNG)
+- Developed Page Object Model (POM) automation framework running 250+ end-to-end regression tests.
+- Integrated parallel test execution reducing regression test run time by 65%.
+- Automated REST API testing with RestAssured validating status codes, payloads, and schema compliance.
+
+2. Load & Performance Testing of E-Commerce APIs (JMeter, Postman)
+- Simulated 500 concurrent virtual users measuring response latency, throughput, and error rates.`,
+    jdText: `Role: Associate QA Automation Engineer (SDET)
+Company: Enterprise Quality Engineering CoE
+Location: Bengaluru / Pune / Remote
+
+Responsibilities:
+- Design, write, and execute automated test scripts for web applications and REST APIs.
+- Work closely with developers to identify edge cases, defects, and performance bottlenecks.
+- Build and maintain Page Object Model automation suites in Selenium with Java or Python.
+- Integrate automated test suites into CI/CD delivery pipelines.
+
+Requirements:
+- Strong grasp of software testing lifecycle (STLC), defect tracking, and test case design.
+- Hands-on experience with Selenium WebDriver and test runners (TestNG / Pytest).
+- Experience validating REST APIs using Postman or automation libraries.
+- Basic SQL proficiency for database validation.`,
+  },
+  {
+    id: "frontend-react-nextjs",
+    title: "Frontend Web Developer (React / Next.js / Tailwind)",
+    role: "Frontend Developer",
+    category: "frontend",
+    tags: ["React", "Next.js", "TypeScript", "Tailwind CSS", "Redux"],
+    description:
+      "Modern client-side engineering, responsive web applications, state management, and web performance.",
+    resumeFileName: "Vikas_Verma_Frontend_Resume.pdf",
+    resumeText: `VIKAS VERMA
+Email: vikas.verma.fe@gmail.com | Delhi NCR, India
+B.Tech in Computer Science | CGPA: 8.7/10 (2021 – 2025)
+
+TECHNICAL SKILLS:
+Languages: TypeScript, JavaScript (ES2023), HTML5, CSS3/SCSS
+Frameworks: React.js, Next.js (App Router), Redux Toolkit, Zustand, TanStack Query
+Styling: Tailwind CSS, CSS Modules, Radix UI, Framer Motion
+Performance & Tools: Web Vitals, Lighthouse, Vite, Webpack, Git, Jest, React Testing Library
+
+PROJECTS:
+1. High-Performance Financial Dashboard (Next.js 14, TypeScript, Tailwind, Chart.js)
+- Built responsive analytics portal achieving 98/100 Lighthouse performance score.
+- Implemented optimistic UI updates, debounced search filters, and virtualization for 10,000+ data rows.
+- Structured component library with atomic design and strict TypeScript typings.
+
+2. Interactive Quiz & Assessment Web App (React, Tailwind CSS, Zustand)
+- Created engaging assessment engine with live timers, keyboard navigation, and audio feedback.`,
+    jdText: `Role: Associate Frontend Developer
+Company: Enterprise Experience Engineering
+Location: Hyderabad / Bengaluru / Gurgaon
+
+Responsibilities:
+- Build pixel-perfect, responsive web interfaces using React.js, TypeScript, and modern CSS frameworks.
+- Optimize frontend web performance, accessibility (WCAG), and responsive cross-browser compatibility.
+- Integrate REST and GraphQL endpoints with robust error handling and loading skeletons.
+- Write clean component tests with Jest and React Testing Library.
+
+Requirements:
+- Strong proficiency in modern JavaScript/TypeScript, React fundamentals, hooks, and virtual DOM.
+- Deep familiarity with Tailwind CSS or modern CSS layout techniques (Flexbox, Grid).
+- Understanding of state management, client routing, and asynchronous data fetching.`,
   },
 ];

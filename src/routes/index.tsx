@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Avatar, type AvatarState } from "@/components/interview/Avatar";
+import { StageProgressIndicator } from "@/components/interview/StageProgressIndicator";
 import {
   BANK,
   LANG_CODES,
@@ -62,6 +63,9 @@ import {
   ShieldCheck,
   Check,
   Info,
+  Search,
+  X,
+  Briefcase,
 } from "lucide-react";
 
 export const Route = createFileRoute("/")({
@@ -356,6 +360,27 @@ function SetupView({
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
   const [previewingVoice, setPreviewingVoice] = useState(false);
 
+  // Preset search & category filter state
+  const [presetSearch, setPresetSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+
+  const filteredPresets = useMemo(() => {
+    return SAMPLE_PRESETS.filter((preset) => {
+      if (selectedCategory !== "all" && preset.category !== selectedCategory) {
+        return false;
+      }
+      if (!presetSearch.trim()) return true;
+      const q = presetSearch.toLowerCase().trim();
+      return (
+        preset.title.toLowerCase().includes(q) ||
+        preset.role.toLowerCase().includes(q) ||
+        preset.description.toLowerCase().includes(q) ||
+        (preset.tags && preset.tags.some((t) => t.toLowerCase().includes(q))) ||
+        preset.resumeText.toLowerCase().includes(q)
+      );
+    });
+  }, [presetSearch, selectedCategory]);
+
   const update = <K extends keyof AppConfig>(key: K, val: AppConfig[K]) =>
     setCfg((p) => ({ ...p, [key]: val }));
 
@@ -565,9 +590,8 @@ function SetupView({
         </h1>
 
         <p className="mt-2.5 max-w-md text-xs sm:text-sm text-navy-foreground/80 leading-relaxed">
-          Simulate a realistic, multi-stage campus technical screening interview. Covers your
-          self-introduction, resume projects, technical competencies, live coding/SQL problem, and
-          scenario reasoning.
+          Practice a realistic campus technical screening interview with Tesla. Respond via voice or
+          text and receive comprehensive performance evaluation.
         </p>
 
         {/* Featured Interviewer Avatar Frame */}
@@ -578,25 +602,25 @@ function SetupView({
         {/* Feature Highlights Grid */}
         <div className="w-full grid grid-cols-3 gap-2.5 text-xs text-navy-foreground/90">
           <div className="rounded-2xl bg-navy-foreground/10 p-3 flex flex-col items-center">
-            <span className="font-display text-lg font-bold">7 Stages</span>
-            <span className="text-[11px] text-navy-foreground/75">Screening Flow</span>
+            <span className="font-display text-sm font-bold">Voice & Text</span>
+            <span className="text-[11px] text-navy-foreground/75">Natural Interaction</span>
           </div>
           <div className="rounded-2xl bg-navy-foreground/10 p-3 flex flex-col items-center">
-            <span className="font-display text-lg font-bold">Coding/SQL</span>
-            <span className="text-[11px] text-navy-foreground/75">Hands-on Challenge</span>
+            <span className="font-display text-sm font-bold">Code Sandbox</span>
+            <span className="text-[11px] text-navy-foreground/75">Live Problems</span>
           </div>
           <div className="rounded-2xl bg-navy-foreground/10 p-3 flex flex-col items-center">
-            <span className="font-display text-lg font-bold">3 Langs</span>
+            <span className="font-display text-sm font-bold">Multilingual</span>
             <span className="text-[11px] text-navy-foreground/75">EN / HI / TE</span>
           </div>
         </div>
 
-        {/* Voice Studio Preview Box */}
+        {/* Voice Preview Box */}
         <div className="mt-5 w-full rounded-2xl bg-navy-foreground/10 p-4 text-left border border-white/10">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 text-xs font-semibold">
               <Volume2 className="h-4 w-4 text-violet" />
-              <span>Speech Engine Voice Studio</span>
+              <span>Interviewer Voice</span>
             </div>
             <button
               type="button"
@@ -607,28 +631,12 @@ function SetupView({
               {previewingVoice ? "Playing…" : "Test Voice"}
             </button>
           </div>
-          <div className="mt-2.5 grid grid-cols-2 gap-2 text-xs">
-            <div>
-              <span className="text-[11px] text-navy-foreground/70">Selected Voice</span>
-              <p className="truncate font-medium">
-                {voices.find((v) => v.voiceURI === cfg.selectedVoiceURI)?.name ||
-                  "Natural Indian English Male (System)"}
-              </p>
-            </div>
-            <div>
-              <span className="text-[11px] text-navy-foreground/70">
-                Speech Speed: {cfg.speechRate}x
-              </span>
-              <input
-                type="range"
-                min="0.75"
-                max="1.25"
-                step="0.05"
-                value={cfg.speechRate}
-                onChange={(e) => update("speechRate", parseFloat(e.target.value))}
-                className="w-full h-1 mt-1 accent-violet bg-white/30 rounded-lg cursor-pointer"
-              />
-            </div>
+          <div className="mt-2 text-xs">
+            <span className="text-[11px] text-navy-foreground/70 block">Selected Voice</span>
+            <p className="truncate font-medium mt-0.5">
+              {voices.find((v) => v.voiceURI === cfg.selectedVoiceURI)?.name ||
+                "Natural Indian English Male (System)"}
+            </p>
           </div>
         </div>
       </section>
@@ -638,9 +646,9 @@ function SetupView({
         {/* Navigation Tabs */}
         <div className="flex items-center justify-between border-b border-border pb-4">
           <div>
-            <h2 className="text-xl font-bold font-display">Configure Screening Round</h2>
+            <h2 className="text-xl font-bold font-display">Configure Interview Session</h2>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Strict 7-stage sequence starting with Greeting and Self-Introduction
+              Upload your documents or select target role to begin
             </p>
           </div>
 
@@ -675,31 +683,148 @@ function SetupView({
         {/* Tab 1: Documents & Presets */}
         {activeTab === "documents" && (
           <div className="space-y-5">
-            {/* Quick Sample Presets */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Quick Load Placement Demo Presets
-                </span>
-                <span className="text-[11px] text-primary font-medium">1-Click Placement Demo</span>
+            {/* Quick Sample Presets with Search & Filter */}
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
+                <div>
+                  <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
+                    Placement Role Presets ({SAMPLE_PRESETS.length} Roles)
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    1-click load matching candidate resume and job description
+                  </span>
+                </div>
+                {cfg.resumeFileName && (
+                  <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1 self-start sm:self-auto bg-emerald-500/10 px-2 py-0.5 rounded-lg border border-emerald-500/20">
+                    <Check className="h-3 w-3" />
+                    <span>Active: {cfg.role}</span>
+                  </span>
+                )}
               </div>
-              <div className="grid gap-2 sm:grid-cols-3">
-                {SAMPLE_PRESETS.map((preset) => (
+
+              {/* Search Bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <input
+                  type="text"
+                  value={presetSearch}
+                  onChange={(e) => setPresetSearch(e.target.value)}
+                  placeholder="Search presets by role, tech, or skill (e.g., Java, Python, AWS, React, SQL)..."
+                  className="w-full rounded-xl border border-input bg-card pl-9 pr-8 py-2 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-ring transition shadow-2xs"
+                />
+                {presetSearch && (
                   <button
-                    key={preset.id}
                     type="button"
-                    onClick={() => handleApplyPreset(preset)}
-                    className="flex flex-col text-left rounded-xl border border-border/80 bg-muted/40 p-2.5 hover:border-primary/60 hover:bg-muted transition text-xs group"
+                    onClick={() => setPresetSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 text-muted-foreground hover:text-foreground"
+                    title="Clear search"
                   >
-                    <span className="font-semibold text-foreground group-hover:text-primary transition line-clamp-1">
-                      {preset.title.split("(")[0]}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground mt-1 line-clamp-1">
-                      {preset.role}
-                    </span>
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Category Filter Chips */}
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 text-[11px]">
+                {[
+                  { id: "all", label: "All Roles" },
+                  { id: "fullstack", label: "Full-Stack" },
+                  { id: "backend", label: "Java" },
+                  { id: "python", label: "Python" },
+                  { id: "aiml", label: "AI / ML" },
+                  { id: "data", label: "Data" },
+                  { id: "cloud", label: "DevOps" },
+                  { id: "qa", label: "QA / SDET" },
+                  { id: "frontend", label: "Frontend" },
+                ].map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setSelectedCategory(cat.id)}
+                    className={cn(
+                      "rounded-lg px-2.5 py-1 font-medium transition shrink-0",
+                      selectedCategory === cat.id
+                        ? "bg-primary text-primary-foreground shadow-2xs"
+                        : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground",
+                    )}
+                  >
+                    {cat.label}
                   </button>
                 ))}
               </div>
+
+              {/* Presets Grid */}
+              {filteredPresets.length > 0 ? (
+                <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 max-h-56 overflow-y-auto pr-1">
+                  {filteredPresets.map((preset) => {
+                    const isSelected = cfg.resumeFileName === preset.resumeFileName;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => handleApplyPreset(preset)}
+                        className={cn(
+                          "flex flex-col text-left rounded-xl border p-2.5 transition text-xs group relative",
+                          isSelected
+                            ? "border-primary bg-primary/10 shadow-2xs"
+                            : "border-border/80 bg-muted/30 hover:border-primary/50 hover:bg-muted/70",
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-1 w-full">
+                          <span
+                            className={cn(
+                              "font-semibold line-clamp-1 transition",
+                              isSelected
+                                ? "text-primary"
+                                : "text-foreground group-hover:text-primary",
+                            )}
+                          >
+                            {preset.title.split("(")[0]}
+                          </span>
+                          {isSelected && (
+                            <Check className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
+                          )}
+                        </div>
+
+                        <span className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">
+                          {preset.role}
+                        </span>
+
+                        {/* Tech tags preview */}
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {preset.tags.slice(0, 3).map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded bg-muted/80 px-1.5 py-0.5 text-[9px] font-mono text-muted-foreground"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                          {preset.tags.length > 3 && (
+                            <span className="text-[9px] text-muted-foreground/60 self-center">
+                              +{preset.tags.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+                  <span>No presets match "{presetSearch}".</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPresetSearch("");
+                      setSelectedCategory("all");
+                    }}
+                    className="ml-2 text-primary font-semibold underline hover:opacity-80"
+                  >
+                    Clear filters
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Candidate Name Input */}
@@ -714,6 +839,163 @@ function SetupView({
                 onChange={(e) => update("name", e.target.value)}
                 className={formFieldStyle}
               />
+            </div>
+
+            {/* Target Role & Experience Level (Customizable for Any Role) */}
+            <div className="rounded-2xl border border-border/80 bg-muted/20 p-4 space-y-3.5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Briefcase className="h-4 w-4 text-primary" />
+                  <span className="text-xs font-bold text-foreground uppercase tracking-wider">
+                    Target Role & Experience Level
+                  </span>
+                </div>
+                <span className="text-[11px] text-muted-foreground">
+                  Customizable for any role & seniority
+                </span>
+              </div>
+
+              {/* Target Role Input with Datalist & Quick Suggestion Chips */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-foreground">
+                    Target Role Title
+                  </label>
+                  <span className="text-[10px] text-muted-foreground">
+                    Type any role or choose a suggestion
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    list="role-suggestions"
+                    placeholder="Enter any role (e.g. Full-Stack Developer, Data Engineer, Cybersecurity, iOS...)"
+                    value={cfg.role}
+                    onChange={(e) => update("role", e.target.value)}
+                    className={cn(formFieldStyle, "pr-8")}
+                  />
+                  {cfg.role && (
+                    <button
+                      type="button"
+                      onClick={() => update("role", "")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs"
+                      title="Clear role"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <datalist id="role-suggestions">
+                  <option value="Full-Stack Developer" />
+                  <option value="Frontend Developer" />
+                  <option value="Java Developer" />
+                  <option value="Python Developer" />
+                  <option value="AI / ML Engineer" />
+                  <option value="Data Analyst" />
+                  <option value="Data Engineer" />
+                  <option value="Cloud & DevOps Engineer" />
+                  <option value="QA & SDET Engineer" />
+                  <option value="Cybersecurity Analyst" />
+                  <option value="Mobile App Developer (Flutter / React Native)" />
+                  <option value="Embedded Systems & C++ Engineer" />
+                  <option value="Site Reliability Engineer (SRE)" />
+                  <option value="Product Analyst" />
+                  <option value="Database Administrator (DBA)" />
+                </datalist>
+
+                {/* Popular Role Quick Chips */}
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  <span className="text-[10px] text-muted-foreground uppercase tracking-wider font-semibold mr-0.5">
+                    Popular:
+                  </span>
+                  {[
+                    "Full-Stack",
+                    "Java",
+                    "Python",
+                    "Frontend",
+                    "AI / ML",
+                    "Data Analyst",
+                    "DevOps",
+                    "QA / SDET",
+                    "Cybersecurity",
+                  ].map((chip) => {
+                    const fullRole =
+                      chip === "Full-Stack"
+                        ? "Full-Stack Developer"
+                        : chip === "Java"
+                          ? "Java Developer"
+                          : chip === "Python"
+                            ? "Python Developer"
+                            : chip === "Frontend"
+                              ? "Frontend Developer"
+                              : chip === "AI / ML"
+                                ? "AI / ML Engineer"
+                                : chip === "Data Analyst"
+                                  ? "Data Analyst"
+                                  : chip === "DevOps"
+                                    ? "Cloud & DevOps Engineer"
+                                    : chip === "QA / SDET"
+                                      ? "QA & SDET Engineer"
+                                      : "Cybersecurity Analyst";
+                    const isSelected = cfg.role.toLowerCase() === fullRole.toLowerCase();
+                    return (
+                      <button
+                        key={chip}
+                        type="button"
+                        onClick={() => update("role", fullRole)}
+                        className={cn(
+                          "rounded-lg px-2 py-0.5 text-[10px] font-medium transition",
+                          isSelected
+                            ? "bg-primary text-primary-foreground font-semibold"
+                            : "bg-card border border-border/70 text-muted-foreground hover:text-foreground hover:bg-muted",
+                        )}
+                      >
+                        {chip}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Experience Level Selector (Fresher to Experienced) */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-foreground">
+                    Experience Level
+                  </label>
+                  <span className="text-[10px] text-muted-foreground">
+                    Calibrates question difficulty & expectations
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                  {[
+                    { id: "fresher" as Level, label: "Fresher", years: "0–1 yrs", desc: "College / Campus" },
+                    { id: "junior" as Level, label: "Junior", years: "1–3 yrs", desc: "Early career" },
+                    { id: "mid" as Level, label: "Mid-Level", years: "3–5 yrs", desc: "Independent" },
+                    { id: "senior" as Level, label: "Senior", years: "5–8 yrs", desc: "Architecture" },
+                    { id: "lead" as Level, label: "Lead / Staff", years: "8+ yrs", desc: "Leadership" },
+                  ].map((lvl) => {
+                    const isSelected = cfg.level === lvl.id;
+                    return (
+                      <button
+                        key={lvl.id}
+                        type="button"
+                        onClick={() => update("level", lvl.id)}
+                        className={cn(
+                          "flex flex-col items-center justify-center rounded-xl border p-2 text-center transition",
+                          isSelected
+                            ? "border-primary bg-primary/10 text-primary font-semibold ring-1 ring-primary/40 shadow-2xs"
+                            : "border-border/80 bg-card text-muted-foreground hover:text-foreground hover:bg-muted/60",
+                        )}
+                      >
+                        <span className="text-xs font-semibold leading-tight">{lvl.label}</span>
+                        <span className="text-[10px] opacity-80 mt-0.5">{lvl.years}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             {/* Resume Upload Card */}
@@ -757,11 +1039,9 @@ function SetupView({
               ) : (
                 <label className="mt-3 flex flex-col items-center justify-center rounded-xl border border-border bg-card p-4 cursor-pointer hover:bg-muted/50 transition">
                   <Upload className="h-5 w-5 text-muted-foreground mb-1" />
-                  <span className="text-xs font-semibold text-foreground">
-                    Upload Resume for Project Deep-Dive
-                  </span>
+                  <span className="text-xs font-semibold text-foreground">Upload Resume</span>
                   <span className="text-[11px] text-muted-foreground mt-0.5">
-                    Tesla will discuss your actual projects without fabricating details
+                    Personalizes questions based on your background and skills
                   </span>
                   <input
                     type="file"
@@ -818,7 +1098,7 @@ function SetupView({
                     Upload Target Job Description
                   </span>
                   <span className="text-[11px] text-muted-foreground mt-0.5">
-                    Calibrates technical competencies & coding problems to role requirements
+                    Aligns technical screening questions to target job requirements
                   </span>
                   <input
                     type="file"
@@ -828,23 +1108,6 @@ function SetupView({
                   />
                 </label>
               )}
-            </div>
-
-            {/* Sequence Preview Box */}
-            <div className="rounded-2xl bg-muted/40 p-4 border border-border/70 text-xs space-y-2">
-              <div className="flex items-center gap-1.5 font-semibold text-foreground">
-                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                <span>Screening Stage Sequence Guaranteed:</span>
-              </div>
-              <ol className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-muted-foreground text-[11px] pl-1">
-                <li>1. Greeting & Self-Introduction</li>
-                <li>2. Education & Resume Projects</li>
-                <li>3. JD & Technical Foundations</li>
-                <li>4. Hands-on Coding or SQL Challenge</li>
-                <li>5. Practical Problem Scenario</li>
-                <li>6. HR & Behavioral (STAR)</li>
-                <li>7. Professional Closing & Report</li>
-              </ol>
             </div>
 
             {analysisError && (
@@ -868,8 +1131,8 @@ function SetupView({
                   className={cn(formFieldStyle, "mt-1.5")}
                 >
                   {ROLES.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
+                    <option key={r.label} value={r.label}>
+                      {r.label}
                     </option>
                   ))}
                 </select>
@@ -1226,309 +1489,298 @@ function LiveInterviewView({
     }
   };
 
-  const currentStageConfig = currentQ.stage ? STAGE_CONFIGS[currentQ.stage] : null;
-  const stageDisplayName = currentStageConfig
-    ? config.lang === "hi"
-      ? currentStageConfig.hindiName
-      : config.lang === "te"
-        ? currentStageConfig.teluguName
-        : currentStageConfig.name
-    : `Stage ${currentQ.stageNumber ?? index + 1}`;
-
   const progressPercent = Math.round(((index + 1) / questions.length) * 100);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[340px_1fr] items-start">
-      {/* Left Column: Video-Call Telepresence Card */}
-      <aside className="rounded-3xl bg-hero p-6 text-navy-foreground shadow-soft flex flex-col items-center border border-white/10">
-        <div className="w-full flex items-center justify-between text-xs text-navy-foreground/75 mb-3">
-          <span className="font-semibold uppercase tracking-wider text-[11px]">
-            {stageDisplayName}
-          </span>
-          <span className="font-mono tabular-nums">
-            {index + 1} of {questions.length}
-          </span>
-        </div>
+    <div className="space-y-4">
+      {/* Non-intrusive Progress Indicator at top of interview screen */}
+      <StageProgressIndicator
+        currentStage={currentQ.stage}
+        interviewType={config.type}
+        currentIndex={index}
+        totalQuestions={questions.length}
+        isCodingChallenge={currentQ.isCodingChallenge}
+      />
 
-        {/* Male Interviewer Avatar Frame */}
-        <Avatar size={200} state={avatarState} showStatusBadge interviewerName="Tesla" />
-
-        {/* Stage Progress Checklist */}
-        <div className="mt-5 w-full text-xs text-navy-foreground/80 space-y-2">
-          <div className="flex justify-between items-center text-[11px]">
-            <span>Screening Progress</span>
-            <span className="font-mono font-bold">{progressPercent}%</span>
-          </div>
-          <div className="h-2 w-full rounded-full bg-navy-foreground/15 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-emerald-400 transition-all duration-300"
-              style={{ width: `${progressPercent}%` }}
-            />
+      <div className="grid gap-6 lg:grid-cols-[340px_1fr] items-start">
+        {/* Left Column: Video-Call Telepresence Card */}
+        <aside className="rounded-3xl bg-hero p-6 text-navy-foreground shadow-soft flex flex-col items-center border border-white/10">
+          <div className="w-full flex items-center justify-between text-xs text-navy-foreground/75 mb-3">
+            <span className="font-semibold uppercase tracking-wider text-[11px]">
+              Live Interview
+            </span>
+            <span className="font-mono tabular-nums">
+              {index + 1} of {questions.length}
+            </span>
           </div>
 
-          {/* Mini stage dots */}
-          <div className="flex items-center justify-between pt-1">
-            {questions.map((q, i) => (
+          {/* Male Interviewer Avatar Frame */}
+          <Avatar size={200} state={avatarState} showStatusBadge interviewerName="Tesla" />
+
+          {/* Progress Checklist */}
+          <div className="mt-5 w-full text-xs text-navy-foreground/80 space-y-2">
+            <div className="flex justify-between items-center text-[11px]">
+              <span>Screening Progress</span>
+              <span className="font-mono font-bold">{progressPercent}%</span>
+            </div>
+            <div className="h-2 w-full rounded-full bg-navy-foreground/15 overflow-hidden">
               <div
-                key={q.id}
-                title={`Stage ${i + 1}: ${q.category}`}
-                className={cn(
-                  "h-1.5 rounded-full transition-all duration-300",
-                  i === index
-                    ? "w-4 bg-emerald-400"
-                    : i < index
-                      ? "w-2 bg-emerald-400/70"
-                      : "w-2 bg-navy-foreground/20",
-                )}
+                className="h-full rounded-full bg-emerald-400 transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
               />
-            ))}
-          </div>
-        </div>
+            </div>
 
-        {/* Session Metadata Badges */}
-        <div className="mt-5 w-full pt-4 border-t border-white/10 flex flex-col gap-1.5 text-xs text-navy-foreground/75">
-          <div className="flex justify-between">
-            <span className="text-navy-foreground/60">Target Role:</span>
-            <span className="font-medium truncate max-w-[170px]">{config.role}</span>
+            {/* Mini progress dots */}
+            <div className="flex items-center justify-between pt-1">
+              {questions.map((q, i) => (
+                <div
+                  key={q.id}
+                  title={`Question ${i + 1}`}
+                  className={cn(
+                    "h-1.5 rounded-full transition-all duration-300",
+                    i === index
+                      ? "w-4 bg-emerald-400"
+                      : i < index
+                        ? "w-2 bg-emerald-400/70"
+                        : "w-2 bg-navy-foreground/20",
+                  )}
+                />
+              ))}
+            </div>
           </div>
-          <div className="flex justify-between">
-            <span className="text-navy-foreground/60">Stage:</span>
-            <span className="font-medium truncate max-w-[170px]">
-              {currentQ.category.replace("_", " ")}
-            </span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-navy-foreground/60">Language:</span>
-            <span className="font-medium">{LANG_NAMES[config.lang]}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-navy-foreground/60">Privacy:</span>
-            <span className="font-medium text-emerald-400">Local Client Audio</span>
-          </div>
-        </div>
-      </aside>
 
-      {/* Right Column: Interactive Stage & Candidate Deck */}
-      <section className="rounded-3xl border border-border bg-card p-6 shadow-soft sm:p-8 space-y-6">
-        {/* Question Header & Context */}
-        <div>
-          <div className="flex items-center justify-between gap-2 mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-primary bg-primary/10 px-2.5 py-1 rounded-lg">
-              {stageDisplayName}
-            </span>
-            <button
-              type="button"
-              onClick={speakCurrentQuestion}
-              disabled={avatarState === "speaking" || !ttsSupported()}
-              className="text-xs font-semibold text-muted-foreground hover:text-foreground transition flex items-center gap-1.5"
+          {/* Session Metadata Badges */}
+          <div className="mt-5 w-full pt-4 border-t border-white/10 flex flex-col gap-1.5 text-xs text-navy-foreground/75">
+            <div className="flex justify-between">
+              <span className="text-navy-foreground/60">Target Role:</span>
+              <span className="font-medium truncate max-w-[170px]">{config.role}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-navy-foreground/60">Language:</span>
+              <span className="font-medium">{LANG_NAMES[config.lang]}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-navy-foreground/60">Privacy:</span>
+              <span className="font-medium text-emerald-400">Local Client Audio</span>
+            </div>
+          </div>
+        </aside>
+
+        {/* Right Column: Interactive Stage & Candidate Deck */}
+        <section className="rounded-3xl border border-border bg-card p-6 shadow-soft sm:p-8 space-y-6">
+          {/* Question Header & Context */}
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-primary bg-primary/10 px-2.5 py-1 rounded-lg">
+                Question {index + 1} of {questions.length}
+              </span>
+              <button
+                type="button"
+                onClick={speakCurrentQuestion}
+                disabled={avatarState === "speaking" || !ttsSupported()}
+                className="text-xs font-semibold text-muted-foreground hover:text-foreground transition flex items-center gap-1.5"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                <span>Repeat Tesla's Question</span>
+              </button>
+            </div>
+
+            <h2
+              key={currentQ.id}
+              className="text-xl sm:text-2xl font-bold leading-snug font-display text-foreground"
             >
-              <RotateCcw className="h-3.5 w-3.5" />
-              <span>Repeat Tesla's Question</span>
-            </button>
+              {localizedQuestionText}
+            </h2>
           </div>
 
-          <h2
-            key={currentQ.id}
-            className="text-xl sm:text-2xl font-bold leading-snug font-display text-foreground"
-          >
-            {localizedQuestionText}
-          </h2>
-
-          {currentQ.contextWhyAsked && (
-            <p className="mt-2 text-xs text-muted-foreground italic flex items-center gap-1.5">
-              <HelpCircle className="h-3.5 w-3.5 text-primary shrink-0" />
-              <span>Screening Objective: {currentQ.contextWhyAsked}</span>
-            </p>
-          )}
-        </div>
-
-        {/* Coding & SQL Challenge Deck (When Stage 4 or isCodingChallenge is active) */}
-        {currentQ.isCodingChallenge && (
-          <div className="rounded-2xl border border-border bg-muted/30 p-4 space-y-3">
-            <div className="flex items-center justify-between border-b border-border/80 pb-2.5">
-              <div className="flex items-center gap-2">
-                <Code2 className="h-4 w-4 text-primary" />
-                <span className="text-xs font-bold uppercase tracking-wider">
-                  Live Coding / SQL Workspace ({currentQ.codingLanguage?.toUpperCase() || "CODE"})
+          {/* Coding & SQL Challenge Deck (When Stage 4 or isCodingChallenge is active) */}
+          {currentQ.isCodingChallenge && (
+            <div className="rounded-2xl border border-border bg-muted/30 p-4 space-y-3">
+              <div className="flex items-center justify-between border-b border-border/80 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <Code2 className="h-4 w-4 text-primary" />
+                  <span className="text-xs font-bold uppercase tracking-wider">
+                    Live Coding / SQL Workspace ({currentQ.codingLanguage?.toUpperCase() || "CODE"})
+                  </span>
+                </div>
+                <span className="text-[11px] font-mono text-muted-foreground">
+                  Type code solution below
                 </span>
               </div>
-              <span className="text-[11px] font-mono text-muted-foreground">
-                Type code solution below
-              </span>
+
+              {currentQ.sampleInputOutput && (
+                <div className="rounded-xl bg-card p-2.5 border border-border/60 text-[11px] font-mono text-muted-foreground whitespace-pre-wrap">
+                  {currentQ.sampleInputOutput}
+                </div>
+              )}
+
+              <textarea
+                rows={8}
+                value={codeAnswer}
+                onChange={(e) => setCodeAnswer(e.target.value)}
+                placeholder="Write your code or SQL query solution here..."
+                className={cn(
+                  formFieldStyle,
+                  "font-mono text-xs leading-relaxed bg-slate-950 text-emerald-400 border-slate-800 resize-y",
+                )}
+                spellCheck={false}
+              />
+            </div>
+          )}
+
+          {/* Input Controls (Voice vs Text Toggle) */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-semibold text-foreground">
+                {currentQ.isCodingChallenge
+                  ? "Candidate Verbal Explanation & Approach"
+                  : "Candidate Response (Microphone or Type)"}
+              </label>
+              <div className="flex rounded-lg bg-muted p-0.5 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setActiveInputMode("voice")}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 font-medium transition",
+                    activeInputMode === "voice"
+                      ? "bg-card text-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  Microphone
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveInputMode("text")}
+                  className={cn(
+                    "rounded-md px-2.5 py-1 font-medium transition",
+                    activeInputMode === "text"
+                      ? "bg-card text-foreground shadow-xs"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  Type Answer
+                </button>
+              </div>
             </div>
 
-            {currentQ.sampleInputOutput && (
-              <div className="rounded-xl bg-card p-2.5 border border-border/60 text-[11px] font-mono text-muted-foreground whitespace-pre-wrap">
-                {currentQ.sampleInputOutput}
-              </div>
-            )}
-
+            {/* Transcript / Text Area */}
             <textarea
-              rows={8}
-              value={codeAnswer}
-              onChange={(e) => setCodeAnswer(e.target.value)}
-              placeholder="Write your code or SQL query solution here..."
+              rows={4}
+              value={candidateAnswer + (interimTranscript ? ` ${interimTranscript}` : "")}
+              onChange={(e) => setCandidateAnswer(e.target.value)}
+              placeholder={
+                activeInputMode === "voice"
+                  ? currentQ.isCodingChallenge
+                    ? "Click 'Start Speaking' to verbally explain your time complexity and algorithm, or type notes here…"
+                    : "Click 'Start Speaking' below to answer with your microphone, or type your response directly…"
+                  : "Type your structured answer here (using clear points or the STAR method)…"
+              }
               className={cn(
                 formFieldStyle,
-                "font-mono text-xs leading-relaxed bg-slate-950 text-emerald-400 border-slate-800 resize-y",
+                "resize-y leading-relaxed font-sans",
+                listening && "ring-2 ring-emerald-500 border-emerald-500/50",
               )}
-              spellCheck={false}
             />
-          </div>
-        )}
 
-        {/* Input Controls (Voice vs Text Toggle) */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <label className="text-xs font-semibold text-foreground">
-              {currentQ.isCodingChallenge
-                ? "Candidate Verbal Explanation & Approach"
-                : "Candidate Response (Microphone or Type)"}
-            </label>
-            <div className="flex rounded-lg bg-muted p-0.5 text-xs">
+            {/* Word Count and Status */}
+            <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
+              <span>
+                {candidateAnswer.trim() ? candidateAnswer.trim().split(/\s+/).length : 0} words
+              </span>
+              {listening && (
+                <span className="text-emerald-500 font-semibold animate-pulse flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  Listening attentively…
+                </span>
+              )}
+            </div>
+
+            {micError && (
+              <p className="mt-2 rounded-xl bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive">
+                {micError}
+              </p>
+            )}
+          </div>
+
+          {/* Call Action Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-border">
+            <div className="flex items-center gap-2">
+              {stt && (
+                <button
+                  type="button"
+                  onClick={handleToggleMic}
+                  disabled={evaluating}
+                  className={cn(
+                    "rounded-xl px-4 py-2.5 text-xs font-semibold shadow-xs transition flex items-center gap-2",
+                    listening
+                      ? "bg-destructive text-destructive-foreground hover:opacity-90"
+                      : "bg-emerald-600 text-white hover:bg-emerald-700",
+                  )}
+                >
+                  <Mic className={cn("h-4 w-4", listening && "animate-pulse")} />
+                  <span>{listening ? "Stop Recording" : "Start Speaking"}</span>
+                </button>
+              )}
+
               <button
                 type="button"
-                onClick={() => setActiveInputMode("voice")}
-                className={cn(
-                  "rounded-md px-2.5 py-1 font-medium transition",
-                  activeInputMode === "voice"
-                    ? "bg-card text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
+                onClick={() => handleSubmitAnswer(true)}
+                disabled={evaluating}
+                className="rounded-xl border border-border px-3.5 py-2.5 text-xs font-medium text-muted-foreground hover:bg-muted transition"
               >
-                Microphone
+                Skip Stage
               </button>
+            </div>
+
+            <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => setActiveInputMode("text")}
-                className={cn(
-                  "rounded-md px-2.5 py-1 font-medium transition",
-                  activeInputMode === "text"
-                    ? "bg-card text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground",
-                )}
+                onClick={() => handleSubmitAnswer(false)}
+                disabled={
+                  evaluating ||
+                  (!candidateAnswer.trim() &&
+                    !interimTranscript &&
+                    (!currentQ.isCodingChallenge || !codeAnswer.trim()))
+                }
+                className="rounded-xl bg-primary px-5 py-2.5 text-xs font-semibold text-primary-foreground shadow-soft hover:opacity-90 transition disabled:opacity-40 flex items-center gap-1.5"
               >
-                Type Answer
+                {evaluating ? (
+                  <>
+                    <Sparkles className="h-3.5 w-3.5 animate-spin" />
+                    <span>Evaluating Answer…</span>
+                  </>
+                ) : (
+                  <>
+                    <span>
+                      {index + 1 === questions.length
+                        ? "Complete Screening & View Report"
+                        : "Submit Answer →"}
+                    </span>
+                  </>
+                )}
               </button>
             </div>
           </div>
 
-          {/* Transcript / Text Area */}
-          <textarea
-            rows={4}
-            value={candidateAnswer + (interimTranscript ? ` ${interimTranscript}` : "")}
-            onChange={(e) => setCandidateAnswer(e.target.value)}
-            placeholder={
-              activeInputMode === "voice"
-                ? currentQ.isCodingChallenge
-                  ? "Click 'Start Speaking' to verbally explain your time complexity and algorithm, or type notes here…"
-                  : "Click 'Start Speaking' below to answer with your microphone, or type your response directly…"
-                : "Type your structured answer here (using clear points or the STAR method)…"
-            }
-            className={cn(
-              formFieldStyle,
-              "resize-y leading-relaxed font-sans",
-              listening && "ring-2 ring-emerald-500 border-emerald-500/50",
-            )}
-          />
-
-          {/* Word Count and Status */}
-          <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
-            <span>
-              {candidateAnswer.trim() ? candidateAnswer.trim().split(/\s+/).length : 0} words
-            </span>
-            {listening && (
-              <span className="text-emerald-500 font-semibold animate-pulse flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                Listening attentively…
-              </span>
-            )}
-          </div>
-
-          {micError && (
-            <p className="mt-2 rounded-xl bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive">
-              {micError}
-            </p>
-          )}
-        </div>
-
-        {/* Call Action Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-border">
-          <div className="flex items-center gap-2">
-            {stt && (
-              <button
-                type="button"
-                onClick={handleToggleMic}
-                disabled={evaluating}
-                className={cn(
-                  "rounded-xl px-4 py-2.5 text-xs font-semibold shadow-xs transition flex items-center gap-2",
-                  listening
-                    ? "bg-destructive text-destructive-foreground hover:opacity-90"
-                    : "bg-emerald-600 text-white hover:bg-emerald-700",
-                )}
-              >
-                <Mic className={cn("h-4 w-4", listening && "animate-pulse")} />
-                <span>{listening ? "Stop Recording" : "Start Speaking"}</span>
-              </button>
-            )}
-
+          {/* End Interview Early Escape Hatch */}
+          <div className="text-center pt-2">
             <button
               type="button"
-              onClick={() => handleSubmitAnswer(true)}
-              disabled={evaluating}
-              className="rounded-xl border border-border px-3.5 py-2.5 text-xs font-medium text-muted-foreground hover:bg-muted transition"
+              onClick={() => {
+                if (candidateAnswer.trim() || (currentQ.isCodingChallenge && codeAnswer.trim())) {
+                  handleSubmitAnswer(false, true);
+                } else {
+                  onEndInterview();
+                }
+              }}
+              className="text-xs text-muted-foreground hover:text-destructive underline-offset-4 hover:underline transition"
             >
-              Skip Stage
+              Conclude interview early and generate report
             </button>
           </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => handleSubmitAnswer(false)}
-              disabled={
-                evaluating ||
-                (!candidateAnswer.trim() &&
-                  !interimTranscript &&
-                  (!currentQ.isCodingChallenge || !codeAnswer.trim()))
-              }
-              className="rounded-xl bg-primary px-5 py-2.5 text-xs font-semibold text-primary-foreground shadow-soft hover:opacity-90 transition disabled:opacity-40 flex items-center gap-1.5"
-            >
-              {evaluating ? (
-                <>
-                  <Sparkles className="h-3.5 w-3.5 animate-spin" />
-                  <span>Evaluating Answer…</span>
-                </>
-              ) : (
-                <>
-                  <span>
-                    {index + 1 === questions.length
-                      ? "Complete Screening & View Report"
-                      : "Submit Answer →"}
-                  </span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* End Interview Early Escape Hatch */}
-        <div className="text-center pt-2">
-          <button
-            type="button"
-            onClick={() => {
-              if (candidateAnswer.trim() || (currentQ.isCodingChallenge && codeAnswer.trim())) {
-                handleSubmitAnswer(false, true);
-              } else {
-                onEndInterview();
-              }
-            }}
-            className="text-xs text-muted-foreground hover:text-destructive underline-offset-4 hover:underline transition"
-          >
-            Conclude interview early and generate report
-          </button>
-        </div>
-      </section>
+        </section>
+      </div>
     </div>
   );
 }
