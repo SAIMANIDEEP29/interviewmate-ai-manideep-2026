@@ -858,9 +858,7 @@ function SetupView({
               {/* Target Role Input with Datalist & Quick Suggestion Chips */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-foreground">
-                    Target Role Title
-                  </label>
+                  <label className="text-xs font-semibold text-foreground">Target Role Title</label>
                   <span className="text-[10px] text-muted-foreground">
                     Type any role or choose a suggestion
                   </span>
@@ -961,20 +959,43 @@ function SetupView({
               {/* Experience Level Selector (Fresher to Experienced) */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-semibold text-foreground">
-                    Experience Level
-                  </label>
+                  <label className="text-xs font-semibold text-foreground">Experience Level</label>
                   <span className="text-[10px] text-muted-foreground">
                     Calibrates question difficulty & expectations
                   </span>
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
                   {[
-                    { id: "fresher" as Level, label: "Fresher", years: "0–1 yrs", desc: "College / Campus" },
-                    { id: "junior" as Level, label: "Junior", years: "1–3 yrs", desc: "Early career" },
-                    { id: "mid" as Level, label: "Mid-Level", years: "3–5 yrs", desc: "Independent" },
-                    { id: "senior" as Level, label: "Senior", years: "5–8 yrs", desc: "Architecture" },
-                    { id: "lead" as Level, label: "Lead / Staff", years: "8+ yrs", desc: "Leadership" },
+                    {
+                      id: "fresher" as Level,
+                      label: "Fresher",
+                      years: "0–1 yrs",
+                      desc: "College / Campus",
+                    },
+                    {
+                      id: "junior" as Level,
+                      label: "Junior",
+                      years: "1–3 yrs",
+                      desc: "Early career",
+                    },
+                    {
+                      id: "mid" as Level,
+                      label: "Mid-Level",
+                      years: "3–5 yrs",
+                      desc: "Independent",
+                    },
+                    {
+                      id: "senior" as Level,
+                      label: "Senior",
+                      years: "5–8 yrs",
+                      desc: "Architecture",
+                    },
+                    {
+                      id: "lead" as Level,
+                      label: "Lead / Staff",
+                      years: "8+ yrs",
+                      desc: "Leadership",
+                    },
                   ].map((lvl) => {
                     const isSelected = cfg.level === lvl.id;
                     return (
@@ -1123,34 +1144,60 @@ function SetupView({
           <div className="space-y-4">
             {/* Target Role & Level */}
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="text-xs font-semibold">
-                Target Role
-                <select
-                  value={cfg.role}
-                  onChange={(e) => update("role", e.target.value)}
-                  className={cn(formFieldStyle, "mt-1.5")}
-                >
-                  {ROLES.map((r) => (
-                    <option key={r.label} value={r.label}>
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              <div>
+                <label className="text-xs font-semibold block mb-1">Target Role Title</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    list="role-suggestions-settings"
+                    placeholder="Enter any role (e.g. Data Engineer, DevOps, Cybersecurity...)"
+                    value={cfg.role}
+                    onChange={(e) => update("role", e.target.value)}
+                    className={cn(formFieldStyle, "pr-8")}
+                  />
+                  {cfg.role && (
+                    <button
+                      type="button"
+                      onClick={() => update("role", "")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs"
+                      title="Clear role"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                <datalist id="role-suggestions-settings">
+                  <option value="Full-Stack Developer" />
+                  <option value="Frontend Developer" />
+                  <option value="Java Developer" />
+                  <option value="Python Developer" />
+                  <option value="AI / ML Engineer" />
+                  <option value="Data Analyst" />
+                  <option value="Data Engineer" />
+                  <option value="Cloud & DevOps Engineer" />
+                  <option value="QA & SDET Engineer" />
+                  <option value="Cybersecurity Analyst" />
+                  <option value="Mobile App Developer (Flutter/React Native)" />
+                  <option value="Embedded Systems & C++ Engineer" />
+                  <option value="Site Reliability Engineer (SRE)" />
+                  <option value="Product Analyst" />
+                </datalist>
+              </div>
 
-              <label className="text-xs font-semibold">
-                Experience Level
+              <div>
+                <label className="text-xs font-semibold block mb-1">Experience Level</label>
                 <select
                   value={cfg.level}
                   onChange={(e) => update("level", e.target.value as Level)}
-                  className={cn(formFieldStyle, "mt-1.5")}
+                  className={cn(formFieldStyle)}
                 >
-                  <option value="fresher">Fresher / Graduate Placement</option>
+                  <option value="fresher">Fresher / Graduate (0–1 yrs)</option>
                   <option value="junior">Junior (1–3 yrs)</option>
-                  <option value="mid">Mid-level (3–6 yrs)</option>
-                  <option value="senior">Senior (6+ yrs)</option>
+                  <option value="mid">Mid-Level (3–5 yrs)</option>
+                  <option value="senior">Senior (5–8 yrs)</option>
+                  <option value="lead">Lead / Staff / Principal (8+ yrs)</option>
                 </select>
-              </label>
+              </div>
             </div>
 
             {/* Interview Type */}
