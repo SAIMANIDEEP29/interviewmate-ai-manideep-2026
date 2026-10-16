@@ -251,6 +251,56 @@ function debounce<T extends (...args: any[]) => any>(
 	};
 }
 /**
+* Infers core primary and secondary competencies for any arbitrary custom role
+*/
+function inferRoleSkills(role) {
+	const r = (role || "").toLowerCase();
+	if (r.includes("python") || r.includes("django") || r.includes("fastapi")) return {
+		primary: "Python",
+		secondary: "FastAPI / Django & Database ORMs"
+	};
+	if (r.includes("java") || r.includes("spring")) return {
+		primary: "Java & Spring Boot",
+		secondary: "Microservices & Hibernate / JPA"
+	};
+	if (r.includes("frontend") || r.includes("react") || r.includes("vue") || r.includes("angular") || r.includes("ui") || r.includes("web")) return {
+		primary: "React & TypeScript",
+		secondary: "Modern State Management & CSS Architecture"
+	};
+	if (r.includes("full") || r.includes("stack")) return {
+		primary: "Full-Stack Web Architecture",
+		secondary: "RESTful APIs & Database Design"
+	};
+	if (r.includes("data") && (r.includes("analyst") || r.includes("bi"))) return {
+		primary: "SQL & Relational Databases",
+		secondary: "Data Warehousing & BI Analytics"
+	};
+	if (r.includes("ai") || r.includes("ml") || r.includes("machine learning") || r.includes("data scientist")) return {
+		primary: "Machine Learning & Model Evaluation",
+		secondary: "Python Data Pipelines & Deep Learning"
+	};
+	if (r.includes("devops") || r.includes("cloud") || r.includes("sre") || r.includes("infrastructure")) return {
+		primary: "Docker & Kubernetes",
+		secondary: "CI/CD Pipelines & Cloud Infrastructure"
+	};
+	if (r.includes("qa") || r.includes("sdet") || r.includes("test")) return {
+		primary: "Test Automation (Selenium/Playwright)",
+		secondary: "API Testing & Quality Engineering"
+	};
+	if (r.includes("cyber") || r.includes("security")) return {
+		primary: "Application Security & OWASP Top 10",
+		secondary: "Threat Modeling & Vulnerability Management"
+	};
+	if (r.includes("mobile") || r.includes("ios") || r.includes("android") || r.includes("flutter")) return {
+		primary: "Mobile Architecture & State Management",
+		secondary: "Native Device APIs & Performance"
+	};
+	return {
+		primary: role || "Software Engineering",
+		secondary: "System Architecture & Engineering Best Practices"
+	};
+}
+/**
 * Builds the complete, ordered, sequential screening interview plan.
 * Guaranteed to execute strictly in order:
 * Stage 1: Greeting & Self-Introduction
@@ -268,25 +318,51 @@ function buildStructuredInterviewPlan(context) {
 	const resumeSkills = extractSkillsFromText(context.resumeText || "");
 	const jdSkills = extractSkillsFromText(context.jdText || "");
 	const matched = resumeSkills.filter((s) => jdSkills.map((j) => j.toLowerCase()).includes(s.toLowerCase()));
-	const primarySkill = matched[0] || resumeSkills[0] || (context.role.toLowerCase().includes("python") ? "Python" : "JavaScript/TypeScript");
-	const secondarySkill = matched[1] || jdSkills[0] || resumeSkills[1] || "RESTful APIs & Database Design";
+	const roleSkills = inferRoleSkills(context.role);
+	const primarySkill = matched[0] || resumeSkills[0] || roleSkills.primary;
+	const secondarySkill = matched[1] || jdSkills[0] || resumeSkills[1] || roleSkills.secondary;
 	const questions = [];
+	const level = context.level || "fresher";
 	const candidateGreetingEn = candidateName ? `Hello ${candidateName}` : "Hello";
 	const candidateGreetingHi = candidateName ? `नमस्ते ${candidateName}` : "नमस्ते";
 	const candidateGreetingTe = candidateName ? `నమస్కారం ${candidateName}` : "నమస్కారం";
+	let stage1TextEn = `${candidateGreetingEn}! I am Tesla, your virtual AI interviewer for the ${context.role} position. `;
+	let stage1TextHi = `${candidateGreetingHi}! मैं आज ${context.role} पद के लिए आपका वर्चुअल AI साक्षात्कारकर्ता टेस्ला हूँ। `;
+	let stage1TextTe = `${candidateGreetingTe}! నేను ఈ రోజు ${context.role} ఉద్యోగం కోసం మీ వర్చువల్ AI ఇంటర్వ్యూవర్ టెస్లాను. `;
+	if (level === "fresher") {
+		stage1TextEn += `As an entry-level candidate, we would love to learn about your academic journey, personal projects, and core interests. Could you please introduce yourself, share what sparked your enthusiasm for software, and highlight the technical areas you enjoy working on most?`;
+		stage1TextHi += `एक फ्रेशर के रूप में, हम आपकी शैक्षणिक यात्रा, व्यक्तिगत प्रोजेक्ट्स और मुख्य रुचियों के बारे में जानना चाहते हैं। क्या आप अपना परिचय दे सकते हैं और बता सकते हैं कि आपको इस क्षेत्र में काम करने की प्रेरणा कहाँ से मिली?`;
+		stage1TextTe += `ఒక ఫ్రెషర్‌గా, మీ విద్యా ప్రయాణం, వ్యక్తిగత ప్రాజెక్ట్‌లు మరియు ఆసక్తుల గురించి తెలుసుకోవాలనుకుంటున్నాము. దయచేసి మిమ్మల్ని మీరు పరిచయం చేసుకొని, మీకు ప్రోగ్రామింగ్‌పై ఆసక్తి ఎలా కలిగిందో వివరించగలరా?`;
+	} else if (level === "junior") {
+		stage1TextEn += `We will be reviewing your hands-on engineering experience, project contributions, and core competencies. To start off, could you please introduce yourself and walk me through your key technical experiences and favorite stack so far?`;
+		stage1TextHi += `हम आपके व्यावहारिक इंजीनियरिंग अनुभव और प्रोजेक्ट्स की समीक्षा करेंगे। शुरू करने के लिए, क्या आप कृपया अपना परिचय दे सकते हैं और अपने तकनीकी अनुभव के बारे में बता सकते हैं?`;
+		stage1TextTe += `మేము మీ ప్రాక్టికల్ ఇంజనీరింగ్ అనుభవం మరియు ప్రాజెక్ట్ భాగస్వామ్యాన్ని సమీక్షిస్తాము. ప్రారంభించడానికి, దయచేసి మిమ్మల్ని మీరు పరిచయం చేసుకొని మీ సాంకేతిక ప్రయాణాన్ని వివరించగలరా?`;
+	} else if (level === "mid") {
+		stage1TextEn += `For this mid-level screening, we will focus on system ownership, engineering best practices, and practical problem-solving. To begin, please introduce yourself and summarize the most impactful production systems or features you have built.`;
+		stage1TextHi += `इस साक्षात्कार में हम सिस्टम ओनरशिप और इंजीनियरिंग कार्यप्रणालियों पर ध्यान देंगे। शुरू करने के लिए, कृपया अपना परिचय दें और अपने मुख्य प्रोजेक्ट्स का सारांश बताएं।`;
+		stage1TextTe += `ఈ ఇంటర్వ్యూలో మనం సిస్టమ్ యాజమాన్యం మరియు ఇంజనీరింగ్ పద్ధతులపై దృష్టి పెడతాము. ప్రారంభించడానికి, దయచేసి మీ పరిచయం మరియు మీరు నిర్మించిన ముఖ్యమైన సిస్టమ్‌ల గురించి చెప్పండి.`;
+	} else if (level === "senior") {
+		stage1TextEn += `For this senior engineering evaluation, our discussion will center on architectural decisions, scalability, trade-offs, and system resilience. To begin, could you walk me through your engineering background and the scale of systems you have architected or maintained?`;
+		stage1TextHi += `इस वरिष्ठ इंजीनियरिंग मूल्यांकन में, हम सिस्टम आर्किटेक्चर, स्केलेबिलिटी और निर्णय लेने की क्षमता पर चर्चा करेंगे। शुरू करने के लिए, कृपया अपनी पृष्ठभूमि और अपने द्वारा प्रबंधित सिस्टम्स के बारे में बताएं।`;
+		stage1TextTe += `ఈ సీనియర్ ఇంజనీరింగ్ ఇంటర్వ్యూలో మనం సిస్టమ్ ఆర్కిటెక్చర్, స్కేలబిలిటీ మరియు ముఖ్యమైన నిర్ణయాలను చర్చిస్తాము. ప్రారంభించడానికి, దయచేసి మీ ఇంజనీరింగ్ నేపథ్యాన్ని వివరించండి.`;
+	} else {
+		stage1TextEn += `As a lead or staff candidate, we will explore high-level technical vision, cross-team engineering leadership, and large-scale platform strategy. To start, please introduce yourself and describe the scope of technical leadership and architectural direction you currently drive.`;
+		stage1TextHi += `एक तकनीकी लीड के रूप में, हम समग्र तकनीकी दृष्टिकोण और बड़े पैमाने के प्लेटफॉर्म्स पर चर्चा करेंगे। कृपया अपना परिचय दें और अपने तकनीकी नेतृत्व के बारे में बताएं।`;
+		stage1TextTe += `ఒక టెక్ లీడ్‌గా, ఉన్నత స్థాయి ఆర్కిటెక్చర్ మరియు బృంద నాయకత్వ అంశాలపై చర్చిస్తాము. దయచేసి మీ పరిచయం మరియు నాయకత్వ అనుభవాన్ని పంచుకోండి.`;
+	}
 	questions.push({
 		id: "stage_1_intro",
 		stage: "stage_1_greeting",
 		stageNumber: 1,
 		totalStages,
 		category: "introduction",
-		text: `${candidateGreetingEn}! I am Tesla, your virtual AI interviewer for this automated screening interview for the ${context.role} position. Over the course of our session, we will first explore your academic background and journey, review your resume projects, assess core technical fundamentals, complete a hands-on coding problem, solve a realistic production scenario, and conclude with behavioral questions. To begin, could you please introduce yourself and walk me through your background?`,
-		hindiText: `${candidateGreetingHi}! मैं आज ${context.role} पद के लिए आपके तकनीकी स्क्रीनिंग साक्षात्कार का वर्चुअल AI साक्षात्कारकर्ता टेस्ला हूँ। इस सत्र में, हम आपकी पृष्ठभूमि, प्रोजेक्ट्स, तकनीकी अवधारणाओं, व्यावहारिक कोडिंग और समस्या-समाधान पर चर्चा करेंगे। शुरू करने के लिए, क्या आप कृपया अपना परिचय दे सकते हैं और अपनी पृष्ठभूमि के बारे में बता सकते हैं?`,
-		teluguText: `${candidateGreetingTe}! నేను ఈ రోజు ${context.role} ఉద్యోగం కోసం మీ వర్చువల్ AI ఇంటర్వ్యూవర్ టెస్లాను. ఈ సెషన్‌లో మనం మీ నేపథ్యం, ప్రాజెక్ట్‌లు, సాంకేతిక అంశాలు, కోడింగ్ సవాలు మరియు సమస్య-పరిష్కార నైపుణ్యాలను చర్చిస్తాము. ప్రారంభించడానికి, దయచేసి మిమ్మల్ని మీరు పరిచయం చేసుకొని మీ నేపథ్యం గురించి చెప్పగలరా?`,
-		transitionIntro: "Welcome to your automated technical screening interview.",
-		hindiTransitionIntro: "आपके तकनीकी स्क्रीनिंग साक्षात्कार में आपका स्वागत है।",
-		teluguTransitionIntro: "మీ టెక్నికల్ స్క్రీనింగ్ ఇంటర్వ్యూకు స్వాగతం.",
-		contextWhyAsked: "Stage 1: Greeting & self-introduction. Establishes rapport and evaluates communication clarity.",
+		text: stage1TextEn,
+		hindiText: stage1TextHi,
+		teluguText: stage1TextTe,
+		transitionIntro: "Stage 1: Greeting & Self-Introduction",
+		hindiTransitionIntro: "चरण 1: अभिवादन और आत्म-परिचय",
+		teluguTransitionIntro: "దశ 1: పరిచయం",
+		contextWhyAsked: `Stage 1: Greeting & self-introduction calibrated for ${level} level. Establishes rapport and evaluates verbal communication clarity.`,
 		expectedKeywords: [
 			"background",
 			"education",
@@ -298,9 +374,22 @@ function buildStructuredInterviewPlan(context) {
 		tip: "Use the Present-Past-Future structure: 1) Who you are now, 2) Relevant academic/project highlights, 3) Why you are excited for this role."
 	});
 	const resumeHasContent = (context.resumeText || "").trim().length > 50;
-	const projectPromptEn = resumeHasContent ? `Thank you for sharing your background. Looking at your resume, you have highlighted work involving ${primarySkill}. Could you walk me through the architecture of your primary project, the core problem it addressed, and your specific technical contributions?` : `Thank you for sharing your background. In your journey toward a ${context.role} role, what is the most technically challenging project or application you have built, and what specific responsibilities did you personally handle?`;
-	const projectPromptHi = resumeHasContent ? `अपने परिचय के लिए धन्यवाद। आपके बायोडाटा में ${primarySkill} पर कार्य का उल्लेख है। क्या आप अपने मुख्य प्रोजेक्ट की रूपरेखा (architecture), उसके उद्देश्य और अपनी व्यक्तिगत तकनीकी भूमिका के बारे में विस्तार से बता सकते हैं?` : `अपने परिचय के लिए धन्यवाद। ${context.role} के रूप में आपने अब तक जो सबसे चुनौतीपूर्ण प्रोजेक्ट बनाया है, उसका उद्देश्य और आपकी व्यक्तिगत तकनीकी भूमिका क्या थी?`;
-	const projectPromptTe = resumeHasContent ? `మీ పరిచయానికి ధన్యవాదాలు. మీ రెజ్యూమ్‌లో ${primarySkill} ప్రాజెక్ట్ ఉంది. మీ ప్రధాన ప్రాజెక్ట్ ఆర్కిటెక్చర్, అది పరిష్కరించిన సమస్య మరియు మీ సాంకేతిక బాధ్యతలను వివరించగలరా?` : `మీ పరిచయానికి ధన్యవాదాలు. ${context.role} పాత్రకు సంబంధించి మీరు నిర్మించిన అత్యంత క్లిష్టమైన ప్రాజెక్ట్ ఆర్కిటెక్చర్ మరియు మీ అనుభవాన్ని వివరించగలరా?`;
+	let projectPromptEn = "";
+	let projectPromptHi = "";
+	let projectPromptTe = "";
+	if (level === "fresher") {
+		projectPromptEn = resumeHasContent ? `Looking at your resume, you have highlighted your work with ${primarySkill}. Could you walk me through the architecture of your primary project, the core problem it solved, your specific contributions, and the biggest technical challenge you had to overcome while building it?` : `In your academic coursework or personal practice for a ${context.role} position, what is the most interesting project or application you have built, and what specific technical hurdles did you solve while implementing it?`;
+		projectPromptHi = resumeHasContent ? `आपके बायोडाटा में ${primarySkill} पर कार्य का उल्लेख है। क्या आप अपने मुख्य प्रोजेक्ट की रूपरेखा, उसके उद्देश्य, आपकी व्यक्तिगत भूमिका और निर्माण के दौरान आई सबसे बड़ी तकनीकी चुनौती के बारे में बता सकते हैं?` : `${context.role} की तैयारी में आपने जो सबसे रुचिकर प्रोजेक्ट बनाया है, उसके उद्देश्य और तकनीकी चुनौतियों के बारे में बताइए।`;
+		projectPromptTe = resumeHasContent ? `మీ రెజ్యూమ్‌లో ${primarySkill} ప్రాజెక్ట్ ఉంది. మీ ప్రధాన ప్రాజెక్ట్ ఆర్కిటెక్చర్, అది పరిష్కరించిన సమస్య మరియు మీరు ఎదుర్కొన్న సాంకేతిక సవాళ్లను వివరించగలరా?` : `${context.role} కొరకు మీరు నిర్మించిన ప్రాజెక్ట్ మరియు ఎదురైన సవాళ్లను వివరించగలరా?`;
+	} else if (level === "junior" || level === "mid") {
+		projectPromptEn = resumeHasContent ? `Reviewing your resume projects featuring ${primarySkill}: Can you explain the end-to-end architecture of a production feature or service you developed? What trade-offs did you make regarding data storage, API design, and error handling?` : `In your engineering journey as a ${context.role}, walk me through a major system or feature you implemented using ${primarySkill}. What architectural choices and testing strategies did you employ to ensure reliability?`;
+		projectPromptHi = `आपके प्रोजेक्ट्स में ${primarySkill} का उल्लेख है। क्या आप किसी महत्वपूर्ण प्रोडक्शन फीचर के आर्किटेक्चर, डेटाबेस डिजाइन और एरर हैंडलिंग के बारे में विस्तार से बता सकते हैं?`;
+		projectPromptTe = `మీ ప్రాజెక్ట్‌లలో ${primarySkill} అనుభవం ఉంది. మీరు అభివృద్ధి చేసిన ప్రొడక్షన్ ఫీచర్ ఆర్కిటెక్చర్, డేటాబేస్ మరియు ఎర్రర్ హ్యాండ్లింగ్ వివరాలను వివరించండి.`;
+	} else {
+		projectPromptEn = resumeHasContent ? `Analyzing your experience with ${primarySkill}: Walk me through a complex distributed system or mission-critical initiative you designed. What were the scalability constraints, latency requirements, and how did you navigate architectural trade-offs under production load?` : `For a senior ${context.role}: Can you walk me through an end-to-end system you architected that scaled to high throughput? How did you address fault tolerance, service boundaries, and state management?`;
+		projectPromptHi = `${primarySkill} के साथ आपके अनुभव को देखते हुए, किसी बड़े पैमाने के डिस्ट्रीब्यूटेड सिस्टम के आर्किटेक्चर, स्केलेबिलिटी और फॉल्ट टॉलरेंस रणनीतियों के बारे में विस्तार से बताइए।`;
+		projectPromptTe = `${primarySkill}తో మీ సీనియర్ అనుభవం ఆధారంగా, మీరు రూపొందించిన పెద్ద స్థాయి డిస్ట్రిబ్యూటెడ్ సిస్టమ్ ఆర్కిటెక్చర్ మరియు స్కేలబిలిటీని వివరించండి.`;
+	}
 	questions.push({
 		id: "stage_2_resume",
 		stage: "stage_2_resume",
@@ -310,10 +399,10 @@ function buildStructuredInterviewPlan(context) {
 		text: projectPromptEn,
 		hindiText: projectPromptHi,
 		teluguText: projectPromptTe,
-		transitionIntro: "Thank you for that introduction. Let us now move to your education and resume projects.",
-		hindiTransitionIntro: "परिचय के लिए धन्यवाद। अब चलिए आपकी शिक्षा और प्रोजेक्ट्स पर चर्चा करते हैं।",
-		teluguTransitionIntro: "మీ పరిచయానికి ధన్యవాదాలు. ఇప్పుడు మీ విద్య మరియు ప్రాజెక్ట్ అనుభవం గురించి చర్చిద్దాం.",
-		contextWhyAsked: `Stage 2: Resume & background deep-dive on stated skills (${primarySkill}). Evaluates real implementation ownership without inventing details.`,
+		transitionIntro: "Stage 2: Resume & Technical Project Deep-Dive",
+		hindiTransitionIntro: "चरण 2: प्रोजेक्ट्स और बायोडाटा पर चर्चा",
+		teluguTransitionIntro: "దశ 2: ప్రాజెక్ట్ వివరాలు",
+		contextWhyAsked: `Stage 2: Resume deep-dive on ${primarySkill} calibrated for ${level} level. Evaluates implementation ownership and architecture clarity.`,
 		expectedKeywords: [
 			primarySkill,
 			"architecture",
@@ -321,37 +410,50 @@ function buildStructuredInterviewPlan(context) {
 			"database",
 			"api",
 			"challenges",
-			"components"
+			"trade-offs"
 		],
 		tip: "Clearly articulate: Problem statement -> Architecture / tech stack chosen -> Your individual role -> Tangible results."
 	});
-	const techQuestion1En = `Moving on to core technical competencies for the ${context.role} position: Can you explain foundational concepts in ${primarySkill} and ${secondarySkill}, and how you structure clean, maintainable code when designing services with them?`;
-	const techQuestion1Hi = `${context.role} पद के लिए मुख्य तकनीकी योग्यताओं पर आते हैं: क्या आप ${primarySkill} और ${secondarySkill} के बुनियादी सिद्धांतों को समझा सकते हैं, और कोड को स्वच्छ व व्यवस्थित रखने के लिए आप क्या तरीके अपनाते हैं?`;
-	const techQuestion1Te = `${context.role} ఉద్యోగానికి సంబంధించిన ముఖ్యమైన సాంకేతిక భావనలు: ${primarySkill} మరియు ${secondarySkill} యొక్క ప్రాథమిక సూత్రాలు మరియు క్లీన్ కోడ్ పద్ధతులను మీరు ఎలా పాటిస్తారో వివరించగలరా?`;
+	let techQuestionEn = "";
+	let techQuestionHi = "";
+	let techQuestionTe = "";
+	if (level === "fresher") {
+		techQuestionEn = `Turning to technical fundamentals for the ${context.role} role: Can you explain core principles in ${primarySkill} and ${secondarySkill}? For example, how memory or state is managed, and what practices you follow to keep your code clean, modular, and bug-free?`;
+		techQuestionHi = `${context.role} के तकनीकी सिद्धांतों पर आते हैं: क्या आप ${primarySkill} और ${secondarySkill} के बुनियादी सिद्धांतों और क्लीन कोड लिखने के तरीकों को समझा सकते हैं?`;
+		techQuestionTe = `${context.role} యొక్క ప్రాథమిక సాంకేతిక సూత్రాలు: ${primarySkill} మరియు ${secondarySkill} లోని ముఖ్య భావనలు మరియు క్లీన్ కోడ్ పద్ధతులను వివరించగలరా?`;
+	} else if (level === "junior" || level === "mid") {
+		techQuestionEn = `Exploring technical depth for ${context.role}: How do you approach concurrency, asynchronous processing, and caching when developing services with ${primarySkill}? Can you share an example of how you optimized query performance or memory consumption?`;
+		techQuestionHi = `${context.role} में तकनीकी गहराई पर: ${primarySkill} के साथ काम करते समय आप कॉनकरेंसी (concurrency), कैशिंग और परफॉरमेंस ऑप्टिमाइज़ेशन को कैसे संभालते हैं?`;
+		techQuestionTe = `${context.role} లో సాంకేతిక నైపుణ్యాలు: ${primarySkill} లో కాన్కరెన్సీ, క్యాషింగ్ మరియు పెర్ఫార్మెన్స్ ఆప్టిమైజేషన్ ఎలా చేస్తారో ఉదాహరణతో చెప్పగలరా?`;
+	} else {
+		techQuestionEn = `Assessing senior engineering foundations for ${context.role}: In a distributed environment using ${primarySkill} and ${secondarySkill}, how do you guarantee data consistency versus availability during network partitions? Walk me through your approach to idempotency, schema migrations, and zero-downtime deployments.`;
+		techQuestionHi = `${context.role} के वरिष्ठ तकनीकी स्तर पर: डिस्ट्रीब्यूटेड वातावरण में डेटा निरंतरता (consistency), आइडमपोटेंसी (idempotency) और जीरो-डाउनटाइम डिप्लॉयमेंट को आप कैसे डिजाइन करते हैं?`;
+		techQuestionTe = `సీనియర్ ఇంజనీరింగ్ సూత్రాలు: డిస్ట్రిబ్యూటెడ్ ఆర్కిటెక్చర్‌లో డేటా కన్సిస్టెన్సీ, ఐడెంపోటెన్సీ మరియు జీరో-డౌన్‌టైమ్ డిప్లాయ్‌మెంట్ ఎలా సాధిస్తారు?`;
+	}
 	questions.push({
 		id: "stage_3_tech_1",
 		stage: "stage_3_technical",
 		stageNumber: 3,
 		totalStages,
 		category: "technical",
-		text: techQuestion1En,
-		hindiText: techQuestion1Hi,
-		teluguText: techQuestion1Te,
-		transitionIntro: "Good explanation. Now let's explore your core technical competencies aligned with the role requirements.",
-		hindiTransitionIntro: "बहुत बढ़िया। अब इस पद के लिए आवश्यक मुख्य तकनीकी योग्यताओं पर चर्चा करते हैं।",
-		teluguTransitionIntro: "మంచిది. ఇప్పుడు ఈ ఉద్యోగానికి సంబంధించిన ముఖ్యమైన సాంకేతిక అంశాలను చూద్దాం.",
-		contextWhyAsked: `Stage 3: Technical foundations aligned to ${context.role} competencies (${primarySkill}, ${secondarySkill}).`,
+		text: techQuestionEn,
+		hindiText: techQuestionHi,
+		teluguText: techQuestionTe,
+		transitionIntro: "Stage 3: Technical Fundamentals & Depth",
+		hindiTransitionIntro: "चरण 3: तकनीकी बुनियादी सिद्धांत",
+		teluguTransitionIntro: "దశ 3: సాంకేతిక నైపుణ్యాలు",
+		contextWhyAsked: `Stage 3: Technical foundations aligned to ${context.role} competencies (${primarySkill}, ${secondarySkill}) at ${level} seniority.`,
 		expectedKeywords: [
 			primarySkill,
 			secondarySkill,
-			"design patterns",
+			"performance",
 			"clean code",
-			"testing",
-			"modularity",
-			"performance"
+			"scalability",
+			"concurrency",
+			"modular"
 		],
-		tip: "State definition first, explain why it matters in production, then share a practical code pattern.",
-		difficulty: "foundational"
+		tip: "State definitions clearly, provide real code or design patterns, and explain how they prevent bugs in production.",
+		difficulty: level === "fresher" ? "foundational" : level === "junior" ? "intermediate" : "advanced"
 	});
 	const codingChallenge = getRoleCodingChallenge(context.role, context.resumeText || "", context.jdText || "");
 	questions.push({
@@ -363,19 +465,34 @@ function buildStructuredInterviewPlan(context) {
 		text: codingChallenge.text,
 		hindiText: codingChallenge.hindiText,
 		teluguText: codingChallenge.teluguText,
-		transitionIntro: "Thank you. Now let's examine your hands-on problem solving with a practical coding challenge.",
-		hindiTransitionIntro: "धन्यवाद। अब एक व्यावहारिक कोडिंग या SQL प्रश्न के माध्यम से आपकी समस्या-समाधान क्षमता का आकलन करते हैं।",
-		teluguTransitionIntro: "ధన్యవాదాలు. ఇప్పుడు ఒక ప్రాక్టికల్ కోడింగ్ లేదా SQL సవాలుతో మీ సామర్థ్యాన్ని పరిశీలిద్దాం.",
+		transitionIntro: "Stage 4: Hands-on Coding & Algorithm Challenge",
+		hindiTransitionIntro: "चरण 4: व्यावहारिक कोडिंग चुनौती",
+		teluguTransitionIntro: "దశ 4: కోడింగ్ సవాలు",
 		contextWhyAsked: "Stage 4: Hands-on coding and algorithm/query design. Evaluates code correctness, algorithmic complexity, and structure.",
 		expectedKeywords: codingChallenge.expectedKeywords,
 		tip: codingChallenge.tip,
-		difficulty: "intermediate",
+		difficulty: level === "fresher" ? "foundational" : "intermediate",
 		isCodingChallenge: true,
 		codingLanguage: codingChallenge.codingLanguage,
 		starterCode: codingChallenge.starterCode,
 		sampleInputOutput: codingChallenge.sampleInputOutput
 	});
-	const scenarioEn = `Let's work through a practical engineering scenario: Imagine a critical service in production for ${context.role} experiences sudden high latency, and users report intermittent timeouts during peak traffic. What step-by-step diagnostic workflow would you follow to isolate the root cause, mitigate the immediate issue, and prevent recurrence?`;
+	let scenarioEn = "";
+	let scenarioHi = "";
+	let scenarioTe = "";
+	if (level === "fresher") {
+		scenarioEn = `Imagine you are working on a new feature for ${context.role}, and your unit test or local server fails with an unexpected exception that you have never seen before. Walk me through how you systematically debug the issue, inspect stack traces, search documentation, and verify your fix.`;
+		scenarioHi = `कल्पना कीजिए कि आप ${context.role} के लिए एक नया फीचर बना रहे हैं और एक अज्ञात एरर आ जाता है। आप इस समस्या को चरणबद्ध तरीके से कैसे डीबग करेंगे, लॉग्स कैसे देखेंगे और समाधान कैसे सत्यापित करेंगे?`;
+		scenarioTe = `మీరు ${context.role} కోసం కోడ్ రాస్తున్నప్పుడు ఊహించని ఎర్రర్ వస్తే, దాన్ని క్రమపద్ధతిలో ఎలా డీబగ్ చేస్తారు మరియు సరిచూస్తారు?`;
+	} else if (level === "junior" || level === "mid") {
+		scenarioEn = `Let's consider a realistic scenario for ${context.role}: After deploying a new release to staging or production, API response times jump by 500% and database connection pool exhaustion errors appear in the logs. What step-by-step diagnostic workflow would you follow to triage the incident, roll back or mitigate, and isolate the root cause?`;
+		scenarioHi = `एक वास्तविक परिदृश्य: प्रोडक्शन रिलीज के बाद API रिस्पॉन्स टाइम 500% बढ़ जाता है और डेटाबेस कनेक्शन एरर आने लगते हैं। आप घटना को संभालने, तुरंत सुधारने और मूल कारण ढूंढने के लिए क्या कदम उठाएंगे?`;
+		scenarioTe = `ప్రొడక్షన్ రిలీజ్ తర్వాత API చాలా స్లో అయ్యి డేటాబేస్ ఎర్రర్స్ వస్తే, మీరు ఎలా స్పందిస్తారు మరియు మూల కారణాన్ని ఎలా పరిష్కరిస్తారు?`;
+	} else {
+		scenarioEn = `During a major high-traffic flash event, your distributed service experiences cascading failures, downstream dependency timeouts, and intermittent memory leaks leading to container OOM kills. As the senior technical lead for ${context.role}, how do you manage the active incident, enforce circuit breakers, shed non-critical load, and lead the subsequent post-mortem investigation?`;
+		scenarioHi = `भारी ट्रैफिक के दौरान आपकी डिस्ट्रीब्यूटेड सेवा में कैस्केडिंग विफलताएं और मेमोरी लीक होने लगते हैं। एक सीनियर लीड के रूप में, आप तत्काल लोड शेडिंग, सर्किट ब्रेकर और पोस्ट-मॉर्टम जांच का नेतृत्व कैसे करेंगे?`;
+		scenarioTe = `భారీ ట్రాఫిక్ సమయంలో సర్వర్లు డౌన్ అయ్యి మెమరీ లీక్స్ వస్తే, సీనియర్ టెక్ లీడ్‌గా మీరు ఇన్సిడెంట్ మేనేజ్‌మెంట్ మరియు సర్క్యూట్ బ్రేకింగ్ ఎలా అమలు చేస్తారు?`;
+	}
 	questions.push({
 		id: "stage_5_scenario",
 		stage: "stage_5_scenario",
@@ -383,63 +500,81 @@ function buildStructuredInterviewPlan(context) {
 		totalStages,
 		category: "scenario",
 		text: scenarioEn,
-		hindiText: `आइए एक व्यावहारिक समस्या समाधान परिदृश्य पर विचार करते हैं: कल्पना करें कि प्रोडक्शन में भारी ट्रैफिक के दौरान आपकी सेवा अचानक बहुत धीमी हो जाती है और टाइमआउट एरर आने लगते हैं। मूल कारण (root cause) पहचानने, तुरंत समाधान करने और इसे दोबारा होने से रोकने के लिए आप क्या क्रमबद्ध कदम उठाएंगे?`,
-		teluguText: `ఒక ప్రాక్టికల్ దృష్టాంతాన్ని పరిశీలిద్దాం: అధిక ట్రాఫిక్ సమయంలో సర్వర్ అకస్మాత్తుగా స్లో అయ్యి టైమౌట్ సమస్యలు వచ్చాయి అనుకుందాం. సమస్య యొక్క మూల కారణాన్ని గుర్తించడానికి మరియు శాశ్వత పరిష్కారం కనుగొనడానికి మీరు ఏ క్రమపద్ధతిని పాటిస్తారు?`,
-		transitionIntro: "Thank you for the solution. Let's now evaluate your reasoning with a realistic engineering incident.",
-		hindiTransitionIntro: "समाधान के लिए धन्यवाद। अब एक वास्तविक इंजीनियरिंग घटना पर आपकी विश्लेषणात्मक सोच का परीक्षण करते हैं।",
-		teluguTransitionIntro: "మీ పరిష్కారానికి ధన్యవాదాలు. ఇప్పుడు ఒక వాస్తవిక సమస్యను ఎదుర్కొనే మీ నిర్ణయాధికారాన్ని చూద్దాం.",
-		contextWhyAsked: "Stage 5: Practical problem-solving scenario. Evaluates structured diagnostic reasoning, triage under pressure, and mitigation strategies.",
+		hindiText: scenarioHi,
+		teluguText: scenarioTe,
+		transitionIntro: "Stage 5: Practical Problem-Solving & Production Scenario",
+		hindiTransitionIntro: "चरण 5: व्यावहारिक समस्या-समाधान परिदृश्य",
+		teluguTransitionIntro: "దశ 5: సమస్య పరిష్కార దృష్టాంతం",
+		contextWhyAsked: `Stage 5: Practical scenario calibrated for ${level} level. Evaluates diagnostic reasoning, triage under pressure, and mitigation strategies.`,
 		expectedKeywords: [
-			"monitoring",
 			"logs",
 			"metrics",
-			"reproduce",
-			"database connection pool",
-			"rollback",
+			"monitoring",
+			"root cause",
 			"mitigate",
-			"root cause"
+			"reproduce",
+			"rollback"
 		],
 		tip: "Structure your response into 4 phases: 1) Triage & stabilize, 2) Diagnostic telemetry & logs, 3) Formulate hypothesis & verify fix, 4) Post-mortem prevention.",
-		difficulty: "intermediate"
+		difficulty: level === "fresher" ? "intermediate" : "advanced"
 	});
-	if (!isTechnicalOnly) questions.push({
-		id: "stage_6_behavioral",
-		stage: "stage_6_behavioral",
-		stageNumber: 6,
-		totalStages,
-		category: "behavioral",
-		text: `Can you describe a situation from your past projects or academic teamwork where you faced a tight delivery deadline or had a disagreement with a peer regarding technical direction? How did you communicate, resolve the disagreement, and ensure the project succeeded?`,
-		hindiText: `क्या आप अपने पिछले प्रोजेक्ट्स या कॉलेज टीम से ऐसी स्थिति का उदाहरण दे सकते हैं जब समय सीमा बहुत कम थी या किसी तकनीकी निर्णय पर साथी से मतभेद था? आपने संवाद कैसे किया, मतभेद कैसे सुलझाया और काम को सफल कैसे बनाया?`,
-		teluguText: `మీరు గతంలో బృందంతో పనిచేసేటప్పుడు ఎదురైన డెడ్‌లైన్ ఒత్తిడి లేదా సాంకేతిక విభేదాల గురించి చెప్పగలరా? మీరు దానిని ఎలా పరిష్కరించారు మరియు ప్రాజెక్ట్ సఫలమయ్యేలా ఎలా చూశారు?`,
-		transitionIntro: "Great explanation. Now let's turn to behavioral and teamwork dynamics.",
-		hindiTransitionIntro: "बहुत अच्छा। अब टीमवर्क, संचार और व्यावहारिक कार्यशैली पर बात करते हैं।",
-		teluguTransitionIntro: "చాలా బాగుంది. ఇప్పుడు జట్టులో పనిచేసే నైపుణ్యాలు మరియు ప్రవర్తనా అంశాలను పరిశీలిద్దాం.",
-		contextWhyAsked: "Stage 6: HR and behavioral evaluation. Assesses emotional intelligence, collaboration, and conflict resolution using STAR.",
-		expectedKeywords: [
-			"situation",
-			"task",
-			"action",
-			"result",
-			"communication",
-			"compromise",
-			"collaboration",
-			"learning"
-		],
-		tip: "Use the STAR method: Situation (context), Task (goal), Action (what YOU did specifically), Result (measurable positive outcome)."
-	});
+	if (!isTechnicalOnly) {
+		let behavioralEn = "";
+		let behavioralHi = "";
+		let behavioralTe = "";
+		if (level === "fresher") {
+			behavioralEn = `Can you describe a situation from your college group projects, internship, or hackathons where you and a teammate had differing opinions on how to build a feature, or faced an impending deadline? How did you communicate, reach an agreement, and ensure the project was delivered?`;
+			behavioralHi = `कॉलेज प्रोजेक्ट या हैकथॉन से ऐसी स्थिति बताएं जब किसी तकनीकी बात पर साथी से अलग राय थी या समय कम था। आपने संवाद कैसे किया और प्रोजेक्ट को सफल कैसे बनाया?`;
+			behavioralTe = `కాలేజ్ ప్రాజెక్ట్ లేదా ఇంటర్న్‌షిప్‌లో సహోద్యోగితో అభిప్రాయ భేదాలు వచ్చినప్పుడు మీరు ఎలా మాట్లాడి సమస్యను పరిష్కరించారో చెప్పండి?`;
+		} else if (level === "junior" || level === "mid") {
+			behavioralEn = `Tell me about a time in your engineering career where requirements changed late in a sprint or you discovered that an initial technical approach would not scale in time for a deadline. How did you communicate with product stakeholders, negotiate trade-offs, and align the team?`;
+			behavioralHi = `अपने करियर का ऐसा उदाहरण बताएं जब प्रोजेक्ट की आवश्यकताएं अचानक बदल गईं। आपने स्टेकहोल्डर्स के साथ कैसे समन्वय किया और समय पर काम पूरा किया?`;
+			behavioralTe = `ప్రాజెక్ట్ అవసరాలు మారినప్పుడు మీరు టీమ్‌తో ఎలా మాట్లాడి ప్రాజెక్ట్‌ను విజయవంతం చేశారో వివరించండి.`;
+		} else {
+			behavioralEn = `As a senior technical leader for ${context.role}, describe a situation where you had to push back against a high-pressure stakeholder request to prevent severe architectural debt, or navigate a strong technical disagreement between senior engineers. How did you build consensus and guide the engineering culture?`;
+			behavioralHi = `एक वरिष्ठ इंजीनियर के रूप में, किसी ऐसी स्थिति का वर्णन करें जब आपको तकनीकी ऋण (tech debt) रोकने के लिए किसी निर्णय का विरोध करना पड़ा या दो टीमों के बीच मतभेद सुलझाना पड़ा। आपने सहमति कैसे बनाई?`;
+			behavioralTe = `ఒక సీనియర్ ఇంజనీర్‌గా, సాంకేతిక విభేదాలను పరిష్కరించి అందరినీ ఒకే తాటిపైకి తెచ్చిన సందర్భాన్ని వివరించండి.`;
+		}
+		questions.push({
+			id: "stage_6_behavioral",
+			stage: "stage_6_behavioral",
+			stageNumber: 6,
+			totalStages,
+			category: "behavioral",
+			text: behavioralEn,
+			hindiText: behavioralHi,
+			teluguText: behavioralTe,
+			transitionIntro: "Stage 6: Behavioral & Cross-Functional Dynamics",
+			hindiTransitionIntro: "चरण 6: व्यावहारिक और टीमवर्क कौशल",
+			teluguTransitionIntro: "దశ 6: ప్రవర్తనా నైపుణ్యాలు",
+			contextWhyAsked: `Stage 6: Behavioral evaluation using STAR method calibrated for ${level} engineering level.`,
+			expectedKeywords: [
+				"situation",
+				"task",
+				"action",
+				"result",
+				"communication",
+				"compromise",
+				"collaboration",
+				"learning"
+			],
+			tip: "Use the STAR method: Situation (context), Task (goal), Action (what YOU did specifically), Result (measurable positive outcome)."
+		});
+	}
 	const closingStageNumber = isTechnicalOnly ? 6 : 7;
+	const closingEn = `We have covered your background, resume projects, technical foundations, hands-on coding, and problem-solving methodology for the ${context.role} role. Before we conclude today's screening session, is there anything else you would like to highlight regarding your skills, or any questions you have for me?`;
 	questions.push({
 		id: "stage_7_closing",
 		stage: "stage_7_closing",
 		stageNumber: closingStageNumber,
 		totalStages,
 		category: "closing",
-		text: `We have covered your background, resume projects, technical foundations, hands-on coding, and problem-solving methodology. Before we conclude today's screening session, is there anything else you would like to highlight regarding your background, or any questions you have for me regarding this role?`,
+		text: closingEn,
 		hindiText: `हमने आपकी पृष्ठभूमि, प्रोजेक्ट्स, तकनीकी कौशल, कोडिंग और समस्या समाधान दृष्टिकोण पर विस्तार से चर्चा कर ली है। आज का साक्षात्कार समाप्त करने से पहले, क्या कुछ ऐसा है जो आप अपनी क्षमताओं के बारे में जोड़ना चाहते हैं, या कोई प्रश्न पूछना चाहते हैं?`,
-		teluguText: `మనం మీ నేపథ్యం, ప్రాజెక్ట్‌లు, సాంకేతిక నైపుణ్యాలు, కోడింగ్ మరియు సమస్య పరిష్కార విధానాన్ని సమగ్రంగా పరిశీలించాము. ముగించే ముందు, మీరు ఇంకా ఏదైనా చెప్పాలనుకుంటున్నారా లేదా ఈ ఉద్యోగం గురించి ఏమైనా అడగాలనుకుంటున్నారా?`,
-		transitionIntro: "Thank you. We are now approaching the concluding stage of the interview.",
-		hindiTransitionIntro: "धन्यवाद। अब हम साक्षात्कार के अंतिम चरण पर पहुँच चुके हैं।",
-		teluguTransitionIntro: "ధన్యవాదాలు. ఇప్పుడు మనం ఇంటర్వ్యూ ముగింపు దశకు చేరుకున్నాము.",
+		teluguText: `మనం మీ నేపథ్యం, ప్రాజెక్ట్‌లు, సాంకేతిక నైపుణ్యాలు, కోడింగ్ మరియు సమస్య పరిష్కార విధానాన్ని సమగ్రంగా పరిశీలించాము. ముగించే ముందు, మీరు ఇంకా ఏదైనా చెప్పాలనుకుంటున్నారా లేదా ఏమైనా అడగాలనుకుంటున్నారా?`,
+		transitionIntro: "Stage 7: Professional Closing & Candidate Reflection",
+		hindiTransitionIntro: "चरण 7: साक्षात्कार समापन",
+		teluguTransitionIntro: "దశ 7: ముగింపు",
 		contextWhyAsked: "Stage 7: Professional closing and candidate reflection. Provides candidate opportunity for final thoughts.",
 		expectedKeywords: [
 			"thank you",
@@ -958,7 +1093,7 @@ Return ONLY valid JSON (no markdown formatting):
 }
 var serverEntryPromise;
 async function getServerEntry() {
-	if (!serverEntryPromise) serverEntryPromise = import("./server-CXLgWBRI.mjs").then((m) => m.default ?? m);
+	if (!serverEntryPromise) serverEntryPromise = import("./server-DCg6MtwC.mjs").then((m) => m.default ?? m);
 	return serverEntryPromise;
 }
 async function normalizeCatastrophicSsrResponse(response) {

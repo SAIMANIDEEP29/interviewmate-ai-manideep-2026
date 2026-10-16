@@ -720,9 +720,6 @@ export function buildStructuredInterviewPlan(context: CandidateContext): StageQu
   return questions;
 }
 
-  return questions;
-}
-
 /**
  * Returns conversational acknowledgment and transition speech based on candidate answer and next stage
  */

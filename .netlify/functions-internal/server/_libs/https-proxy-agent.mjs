@@ -1,7 +1,7 @@
 import { i as __require, t as __commonJSMin } from "../_runtime.mjs";
 import { t as require_src } from "./debug+[...].mjs";
 import { t as require_dist$1 } from "./agent-base.mjs";
-//#region node_modules/gaxios/node_modules/https-proxy-agent/dist/parse-proxy-response.js
+//#region node_modules/https-proxy-agent/dist/parse-proxy-response.js
 var require_parse_proxy_response = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var __importDefault = exports && exports.__importDefault || function(mod) {
 		return mod && mod.__esModule ? mod : { "default": mod };
@@ -86,7 +86,7 @@ var require_parse_proxy_response = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.parseProxyResponse = parseProxyResponse;
 }));
 //#endregion
-//#region node_modules/gaxios/node_modules/https-proxy-agent/dist/index.js
+//#region node_modules/https-proxy-agent/dist/index.js
 var require_dist = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
 		if (k2 === void 0) k2 = k;

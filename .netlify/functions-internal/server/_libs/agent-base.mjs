@@ -1,5 +1,5 @@
 import { i as __require, t as __commonJSMin } from "../_runtime.mjs";
-//#region node_modules/gaxios/node_modules/https-proxy-agent/node_modules/agent-base/dist/helpers.js
+//#region node_modules/agent-base/dist/helpers.js
 var require_helpers = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
 		if (k2 === void 0) k2 = k;
@@ -68,7 +68,7 @@ var require_helpers = /* @__PURE__ */ __commonJSMin(((exports) => {
 	exports.req = req;
 }));
 //#endregion
-//#region node_modules/gaxios/node_modules/https-proxy-agent/node_modules/agent-base/dist/index.js
+//#region node_modules/agent-base/dist/index.js
 var require_dist = /* @__PURE__ */ __commonJSMin(((exports) => {
 	var __createBinding = exports && exports.__createBinding || (Object.create ? (function(o, m, k, k2) {
 		if (k2 === void 0) k2 = k;
