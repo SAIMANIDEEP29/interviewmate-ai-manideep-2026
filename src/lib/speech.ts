@@ -5,7 +5,7 @@ export const sttSupported = () =>
 
 function pickVoice(langCode: string): SpeechSynthesisVoice | undefined {
   const voices = window.speechSynthesis.getVoices();
-  const base = langCode.split("-")[0];
+  const base = langCode.split("-")[0] ?? langCode;
   const exact = voices.filter((v) => v.lang.replace("_", "-").toLowerCase() === langCode.toLowerCase());
   const loose = voices.filter((v) => v.lang.toLowerCase().startsWith(base));
   const pool = exact.length ? exact : loose;

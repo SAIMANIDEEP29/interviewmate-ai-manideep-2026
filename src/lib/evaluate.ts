@@ -16,7 +16,7 @@ export function evaluate(q: Question, raw: string): Evaluation {
   if (q.answer) {
     const ok = q.answer.some((a) => new RegExp(`(^|\\s)${a.toLowerCase()}(\\s|$|%)`, "u").test(answer));
     return ok
-      ? { score: 10, matched: [q.answer[0]], skipped: false, feedback: `Correct! ${q.tip}` }
+      ? { score: 10, matched: [q.answer[0] ?? ""], skipped: false, feedback: `Correct! ${q.tip}` }
       : { score: 2, matched: [], skipped: false, feedback: `Not quite. ${q.tip}` };
   }
 
