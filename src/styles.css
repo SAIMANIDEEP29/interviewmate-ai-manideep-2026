@@ -66,41 +66,126 @@
   --border: oklch(0.91 0.012 265);
   --input: oklch(0.9 0.015 265);
   --ring: oklch(0.5 0.14 272);
-  --gradient-navy: linear-gradient(145deg, oklch(0.22 0.07 268), oklch(0.3 0.11 275) 60%, oklch(0.34 0.12 290));
+  --gradient-navy: linear-gradient(
+    145deg,
+    oklch(0.22 0.07 268),
+    oklch(0.3 0.11 275) 60%,
+    oklch(0.34 0.12 290)
+  );
   --shadow-soft: 0 1px 2px oklch(0.2 0.05 268 / 0.04), 0 12px 32px -12px oklch(0.2 0.05 268 / 0.18);
 }
 
 @layer base {
-  * { border-color: var(--color-border); }
+  * {
+    border-color: var(--color-border);
+  }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
   }
-  h1, h2, h3 { font-family: var(--font-display); letter-spacing: -0.02em; }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    letter-spacing: -0.02em;
+  }
 }
 
-@utility bg-hero { background: var(--gradient-navy); }
-@utility shadow-soft { box-shadow: var(--shadow-soft); }
+@utility bg-hero {
+  background: var(--gradient-navy);
+}
+@utility shadow-soft {
+  box-shadow: var(--shadow-soft);
+}
 
-@keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
-@keyframes talk { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
-@keyframes wave { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
-@keyframes ring { 0% { transform: scale(1); opacity: 0.5; } 100% { transform: scale(1.35); opacity: 0; } }
-@keyframes floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.1);
+  }
+}
+@keyframes talk {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+@keyframes wave {
+  0%,
+  100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+@keyframes ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+@keyframes floaty {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
 
-@utility animate-blink { animation: blink 4.5s infinite; transform-origin: center; transform-box: fill-box; }
-@utility animate-talk { animation: talk 0.28s infinite; transform-origin: center; transform-box: fill-box; }
-@utility animate-wave { animation: wave 0.9s ease-in-out infinite; transform-origin: bottom; }
-@utility animate-ring { animation: ring 1.6s ease-out infinite; }
-@utility animate-floaty { animation: floaty 5s ease-in-out infinite; }
+@utility animate-blink {
+  animation: blink 4.5s infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+@utility animate-talk {
+  animation: talk 0.28s infinite;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+@utility animate-wave {
+  animation: wave 0.9s ease-in-out infinite;
+  transform-origin: bottom;
+}
+@utility animate-ring {
+  animation: ring 1.6s ease-out infinite;
+}
+@utility animate-floaty {
+  animation: floaty 5s ease-in-out infinite;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }
 
 @media print {
-  .no-print { display: none !important; }
-  body { background: white; }
-  .print-card { box-shadow: none !important; break-inside: avoid; }
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+  .print-card {
+    box-shadow: none !important;
+    break-inside: avoid;
+  }
 }

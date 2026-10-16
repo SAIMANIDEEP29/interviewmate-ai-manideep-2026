@@ -1,21 +1,84 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Avatar } from "@/components/interview/Avatar";
+import { Avatar, type AvatarState } from "@/components/interview/Avatar";
 import {
-  BANK, LANG_CODES, LANG_NAMES, ROLES, pickQuestions, questionText,
-  type InterviewType, type Lang, type Level, type Question,
+  BANK,
+  LANG_CODES,
+  LANG_NAMES,
+  ROLES,
+  pickQuestions,
+  questionText,
+  type InterviewType,
+  type Lang,
+  type Level,
 } from "@/lib/questions";
 import { evaluate, type Evaluation } from "@/lib/evaluate";
-import { createRecognizer, hasVoiceFor, speak, stopSpeaking, sttSupported, ttsSupported } from "@/lib/speech";
+import {
+  createRecognizer,
+  getAvailableVoices,
+  getLocaleCode,
+  hasVoiceFor,
+  pickRecommendedVoice,
+  speak,
+  stopSpeaking,
+  sttSupported,
+  ttsSupported,
+} from "@/lib/speech";
+import {
+  parseDocumentFile,
+  SAMPLE_PRESETS,
+  type DocumentAnalysisResult,
+  type ParsedDocument,
+  type SamplePreset,
+} from "@/lib/document-parser";
+import {
+  buildStructuredInterviewPlan,
+  getStageTransitionSpeech,
+  STAGE_CONFIGS,
+  type StageKey,
+  type StageQuestion,
+} from "@/lib/interview-controller";
 import { cn } from "@/lib/utils";
+import {
+  Upload,
+  FileText,
+  Trash2,
+  Sparkles,
+  Volume2,
+  Mic,
+  RotateCcw,
+  CheckCircle2,
+  AlertCircle,
+  HelpCircle,
+  Download,
+  Printer,
+  ChevronRight,
+  Sliders,
+  BrainCircuit,
+  Award,
+  BookOpen,
+  Code2,
+  Terminal,
+  ShieldCheck,
+  Check,
+  Info,
+} from "lucide-react";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "InterviewMate AI — Practice Mock Interviews by Voice" },
-      { name: "description", content: "Practice HR, technical and aptitude interviews in English, Hindi or Telugu with a speaking AI-style interviewer and instant feedback." },
-      { property: "og:title", content: "InterviewMate AI — Voice Mock Interviews" },
-      { property: "og:description", content: "Voice-driven practice interviews with local scoring, feedback and a printable report." },
+      { title: "InterviewMate AI — Professional Voice & Resume Mock Interviewer" },
+      {
+        name: "description",
+        content:
+          "AI technical screening interview simulation inspired by campus placement screening standards. Practice one-on-one with virtual interviewer Tesla in English, Hindi, or Telugu.",
+      },
+      { property: "og:title", content: "InterviewMate AI — Voice & Resume Mock Interviews" },
+      {
+        property: "og:description",
+        content:
+          "Practice structured technical screening interviews with avatar telepresence, resume gap analysis, hands-on coding, and instant scored feedback.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -23,363 +86,1761 @@ export const Route = createFileRoute("/")({
   component: App,
 });
 
-interface Config { name: string; role: string; level: Level; type: InterviewType; lang: Lang; count: number }
-interface Response { qid: string; answer: string; evaluation: Evaluation }
-interface Session { phase: "setup" | "interview" | "report"; config: Config; qids: string[]; index: number; responses: Response[]; startedAt: number }
+/* ---------------- Domain Models ---------------- */
 
-const KEY = "interviewmate.session.v1";
-const DEFAULT: Config = { name: "", role: "python", level: "fresher", type: "hr", lang: "en", count: 5 };
-const fresh = (): Session => ({ phase: "setup", config: DEFAULT, qids: [], index: 0, responses: [], startedAt: 0 });
+export interface ActiveQuestion {
+  id: string;
+  stage?: StageKey;
+  stageNumber?: number;
+  totalStages?: number;
+  category: string;
+  text: string;
+  hindiText?: string;
+  teluguText?: string;
+  transitionIntro?: string;
+  hindiTransitionIntro?: string;
+  teluguTransitionIntro?: string;
+  contextWhyAsked?: string;
+  expectedKeywords: string[];
+  tip: string;
+  difficulty?: "foundational" | "intermediate" | "advanced";
+  isCodingChallenge?: boolean;
+  codingLanguage?: string;
+  starterCode?: string;
+  sampleInputOutput?: string;
+}
+
+export interface DetailedEvaluation {
+  score: number;
+  metrics: {
+    technicalKnowledge: number;
+    communication: number;
+    problemSolving: number;
+    jdRelevance: number;
+  };
+  strengths: string[];
+  areasToImprove: string[];
+  coachingFeedback: string;
+  sampleModelAnswer: string;
+}
+
+export interface InterviewResponse {
+  qid: string;
+  stageNumber?: number;
+  category: string;
+  questionText: string;
+  answer: string;
+  codeSnippet?: string;
+  evaluation: DetailedEvaluation;
+  timeSpentSec: number;
+}
+
+export interface AppConfig {
+  mode: "resume_jd" | "quick_role";
+  name: string;
+  role: string;
+  level: Level;
+  type: InterviewType | "mixed";
+  lang: Lang;
+  durationMins: number;
+  questionCount: number;
+  speechRate: number;
+  selectedVoiceURI: string;
+  resumeFileName?: string;
+  resumeText?: string;
+  jdFileName?: string;
+  jdText?: string;
+  analysis?: DocumentAnalysisResult;
+}
+
+export interface InterviewSession {
+  phase: "setup" | "interview" | "report";
+  config: AppConfig;
+  questions: ActiveQuestion[];
+  index: number;
+  responses: InterviewResponse[];
+  startedAt: number;
+}
+
+const STORAGE_KEY = "interviewmate.session.v3";
+
+const DEFAULT_CONFIG: AppConfig = {
+  mode: "resume_jd",
+  name: "",
+  role: "Full-Stack Developer",
+  level: "fresher",
+  type: "mixed",
+  lang: "en",
+  durationMins: 20,
+  questionCount: 6,
+  speechRate: 0.92,
+  selectedVoiceURI: "",
+  resumeFileName: "",
+  resumeText: "",
+  jdFileName: "",
+  jdText: "",
+};
+
+const createFreshSession = (): InterviewSession => ({
+  phase: "setup",
+  config: DEFAULT_CONFIG,
+  questions: [],
+  index: 0,
+  responses: [],
+  startedAt: 0,
+});
 
 function App() {
-  const [s, setS] = useState<Session>(fresh);
+  const [session, setSession] = useState<InterviewSession>(createFreshSession);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    try { const raw = localStorage.getItem(KEY); if (raw) setS(JSON.parse(raw)); } catch { /* ignore */ }
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        setSession(JSON.parse(stored));
+      }
+    } catch {
+      /* ignore storage load error */
+    }
     setLoaded(true);
   }, []);
-  useEffect(() => { if (loaded) localStorage.setItem(KEY, JSON.stringify(s)); }, [s, loaded]);
 
-  const reset = () => { stopSpeaking(); localStorage.removeItem(KEY); setS(fresh()); };
+  useEffect(() => {
+    if (loaded) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+      } catch {
+        /* storage full or private mode */
+      }
+    }
+  }, [session, loaded]);
+
+  const resetAll = () => {
+    stopSpeaking();
+    localStorage.removeItem(STORAGE_KEY);
+    setSession(createFreshSession());
+  };
 
   return (
-    <div className="min-h-screen">
-      <header className="no-print border-b bg-card/80 backdrop-blur sticky top-0 z-10">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-2">
-            <div className="grid h-8 w-8 place-items-center rounded-lg bg-hero font-display text-sm font-bold text-primary-foreground">IM</div>
-            <span className="font-display font-semibold">InterviewMate <span className="text-violet">AI</span></span>
+    <div className="min-h-screen bg-background text-foreground antialiased flex flex-col justify-between">
+      {/* Top Bar Header */}
+      <header className="no-print sticky top-0 z-20 border-b border-border/80 bg-card/90 backdrop-blur-md">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-hero font-display text-base font-bold text-navy-foreground shadow-sm">
+              IM
+            </div>
+            <div>
+              <span className="font-display font-semibold tracking-tight text-foreground text-base sm:text-lg">
+                InterviewMate <span className="text-violet">AI</span>
+              </span>
+              <span className="hidden sm:inline-block ml-2 text-xs text-muted-foreground font-medium">
+                · Placement Screening Studio
+              </span>
+            </div>
           </div>
-          {s.phase !== "setup" && (
-            <button onClick={reset} className="rounded-lg border px-3 py-1.5 text-sm font-medium hover:bg-muted">Reset session</button>
-          )}
+
+          <div className="flex items-center gap-3">
+            <div className="hidden md:flex items-center gap-1.5 rounded-full bg-muted/60 px-2.5 py-1 text-[11px] text-muted-foreground">
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
+              <span>Privacy-Protected Client Voice</span>
+            </div>
+            {session.phase !== "setup" && (
+              <button
+                onClick={resetAll}
+                className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition"
+              >
+                Reset session
+              </button>
+            )}
+          </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-6 sm:py-10">
+
+      {/* Main Container */}
+      <main className="mx-auto w-full max-w-6xl px-4 py-6 sm:py-8 flex-1">
         {!loaded ? (
-          <div className="grid h-64 place-items-center text-muted-foreground" role="status">Loading…</div>
-        ) : s.phase === "setup" ? (
-          <Setup initial={s.config} onStart={(config) => {
-            const qs = pickQuestions(config.type, config.role, config.count, Date.now() % 100000);
-            setS({ phase: "interview", config, qids: qs.map((q) => q.id), index: 0, responses: [], startedAt: Date.now() });
-          }} />
-        ) : s.phase === "interview" ? (
-          <Interview session={s} onAnswer={(r, end) => setS((p) => {
-            const responses = [...p.responses, r];
-            const done = end || p.index + 1 >= p.qids.length;
-            return { ...p, responses, index: p.index + 1, phase: done ? "report" : "interview" };
-          })} onEnd={() => setS((p) => ({ ...p, phase: "report" }))} />
+          <div className="grid h-64 place-items-center text-muted-foreground text-sm font-medium">
+            Loading session state…
+          </div>
+        ) : session.phase === "setup" ? (
+          <SetupView
+            initialConfig={session.config}
+            onStart={(config, questions) => {
+              setSession({
+                phase: "interview",
+                config,
+                questions,
+                index: 0,
+                responses: [],
+                startedAt: Date.now(),
+              });
+            }}
+          />
+        ) : session.phase === "interview" ? (
+          <LiveInterviewView
+            session={session}
+            onAnswer={(response, forceEnd) => {
+              setSession((prev) => {
+                const nextResponses = [...prev.responses, response];
+                const isFinished = forceEnd || prev.index + 1 >= prev.questions.length;
+                return {
+                  ...prev,
+                  responses: nextResponses,
+                  index: prev.index + 1,
+                  phase: isFinished ? "report" : "interview",
+                };
+              });
+            }}
+            onEndInterview={() => {
+              setSession((prev) => ({ ...prev, phase: "report" }));
+            }}
+          />
         ) : (
-          <Report session={s} onRestart={reset} onRetry={() => setS({ ...fresh(), config: s.config })} />
+          <ReportView
+            session={session}
+            onRestart={resetAll}
+            onRetry={() => {
+              setSession((prev) => ({
+                ...createFreshSession(),
+                config: prev.config,
+              }));
+            }}
+          />
         )}
-        <Disclosure />
       </main>
+
+      {/* Footer & Educational Disclosure */}
+      <footer className="no-print mt-auto border-t border-border/60 bg-card/40 py-6">
+        <div className="mx-auto max-w-5xl px-4 text-center text-xs text-muted-foreground space-y-2">
+          <p className="leading-relaxed">
+            <strong>Educational Practice Simulation:</strong> InterviewMate AI simulates an
+            automated technical screening interview inspired by placement screening standards (such
+            as general HCLTech screening structures). It is an independent college practice tool and
+            does not claim to reproduce proprietary platforms (e.g. BerriBot) or internal enterprise
+            evaluation algorithms.
+          </p>
+          <p className="text-[11px] text-muted-foreground/75">
+            <strong>Privacy & Integrity Notice:</strong> Voice recognition and speech synthesis run
+            locally in your browser. No video, eye-tracking, or identity surveillance is performed.
+            Resumes and Job Descriptions are parsed solely for real-time practice question
+            alignment.
+          </p>
+        </div>
+      </footer>
     </div>
   );
 }
 
-function Disclosure() {
-  return (
-    <p className="no-print mx-auto mt-10 max-w-3xl text-center text-xs leading-relaxed text-muted-foreground">
-      Practice demo for learning purposes only. Questions are scored locally in your browser using answer length and relevant
-      keywords — no remote AI model is called and nothing is uploaded. Voice features depend on your browser and installed
-      voices (Chrome/Edge work best); Hindi/Telugu voices may be unavailable on some devices. Your session is saved only on this device.
-    </p>
-  );
-}
+/* =========================================================================
+   1. SETUP VIEW (Resume + JD Ingestion, Presets, Settings, Voice Studio)
+   ========================================================================= */
 
-/* ---------------- Setup ---------------- */
-const field = "w-full rounded-lg border border-input bg-card px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring";
+const formFieldStyle =
+  "w-full rounded-xl border border-input bg-card px-3.5 py-2.5 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition shadow-xs";
 
-function Setup({ initial, onStart }: { initial: Config; onStart: (c: Config) => void }) {
-  const [c, setC] = useState<Config>(initial);
-  const [voiceInfo, setVoiceInfo] = useState<string>("");
-  const set = <K extends keyof Config>(k: K, v: Config[K]) => setC((p) => ({ ...p, [k]: v }));
+function SetupView({
+  initialConfig,
+  onStart,
+}: {
+  initialConfig: AppConfig;
+  onStart: (config: AppConfig, questions: ActiveQuestion[]) => void;
+}) {
+  const [cfg, setCfg] = useState<AppConfig>(initialConfig);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisError, setAnalysisError] = useState("");
+  const [activeTab, setActiveTab] = useState<"documents" | "settings">("documents");
 
-  const poolSize = useMemo(() => pickQuestions(c.type, c.role, 99, 1).length, [c.type, c.role]);
-  useEffect(() => { if (c.count > poolSize) set("count", poolSize); }, [poolSize]); // eslint-disable-line
+  // Voice studio state
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [previewingVoice, setPreviewingVoice] = useState(false);
 
+  const update = <K extends keyof AppConfig>(key: K, val: AppConfig[K]) =>
+    setCfg((p) => ({ ...p, [key]: val }));
+
+  // Populate browser voices with default to Indian English Male when available
   useEffect(() => {
-    const check = () => {
-      if (!ttsSupported()) return setVoiceInfo("Your browser can't speak questions aloud — they'll be shown as text.");
-      setVoiceInfo(hasVoiceFor(LANG_CODES[c.lang]) ? "" : `No ${LANG_NAMES[c.lang]} voice found on this device; a default voice will be used.`);
+    const refreshVoices = () => {
+      if (ttsSupported()) {
+        const loadedVoices = getAvailableVoices();
+        setVoices(loadedVoices);
+        if (!cfg.selectedVoiceURI && loadedVoices.length > 0) {
+          const recommended = pickRecommendedVoice(getLocaleCode(cfg.lang));
+          if (recommended && recommended.voice) {
+            update("selectedVoiceURI", recommended.voice.voiceURI);
+          }
+        }
+      }
     };
-    check();
-    if (ttsSupported()) window.speechSynthesis.onvoiceschanged = check;
-  }, [c.lang]);
+    refreshVoices();
+    if (ttsSupported()) {
+      window.speechSynthesis.onvoiceschanged = refreshVoices;
+    }
+  }, [cfg.lang]);
+
+  // Voice preview function
+  const handlePreviewVoice = () => {
+    if (!ttsSupported()) return;
+    setPreviewingVoice(true);
+    const sampleText =
+      cfg.lang === "hi"
+        ? "नमस्ते! मैं आपका वर्चुअल साक्षात्कारकर्ता टेस्ला हूँ। क्या आप साक्षात्कार के लिए तैयार हैं?"
+        : cfg.lang === "te"
+          ? "నమస్కారం! నేను మీ ఇంటర్వ్యూవర్ టెస్లా. మీరు ఇంటర్వ్యూకు సిద్ధంగా ఉన్నారా?"
+          : "Hello! I am Tesla, your virtual interviewer for today's technical screening session.";
+
+    speak(sampleText, getLocaleCode(cfg.lang), {
+      voiceURI: cfg.selectedVoiceURI,
+      rate: cfg.speechRate,
+      onStart: () => setPreviewingVoice(true),
+      onEnd: () => setPreviewingVoice(false),
+      onError: () => setPreviewingVoice(false),
+    });
+  };
+
+  // Document upload handlers
+  const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAnalysisError("");
+    try {
+      const parsed = await parseDocumentFile(file);
+      update("resumeFileName", parsed.name);
+      update("resumeText", parsed.text);
+    } catch (err: unknown) {
+      setAnalysisError(err instanceof Error ? err.message : "Failed to parse resume document.");
+    }
+  };
+
+  const handleJdUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAnalysisError("");
+    try {
+      const parsed = await parseDocumentFile(file);
+      update("jdFileName", parsed.name);
+      update("jdText", parsed.text);
+    } catch (err: unknown) {
+      setAnalysisError(
+        err instanceof Error ? err.message : "Failed to parse Job Description document.",
+      );
+    }
+  };
+
+  const handleApplyPreset = (preset: SamplePreset) => {
+    setAnalysisError("");
+    setCfg((prev) => ({
+      ...prev,
+      role: preset.role,
+      resumeFileName: preset.resumeFileName,
+      resumeText: preset.resumeText,
+      jdFileName: "Job_Description.txt",
+      jdText: preset.jdText,
+    }));
+  };
+
+  // Launch interview with guaranteed Stage 1 Greeting & Self-Introduction
+  const handleBeginInterview = async () => {
+    setAnalysisError("");
+
+    // Fallback if quick role practice without documents: use structured screening plan
+    if (cfg.mode === "quick_role" || (!cfg.resumeText && !cfg.jdText)) {
+      const structuredPlan = buildStructuredInterviewPlan({
+        name: cfg.name,
+        role: cfg.role,
+        level: cfg.level,
+        type: cfg.type,
+        lang: cfg.lang,
+        questionCount: cfg.questionCount,
+        resumeFileName: cfg.resumeFileName,
+        resumeText: cfg.resumeText,
+        jdFileName: cfg.jdFileName,
+        jdText: cfg.jdText,
+      });
+
+      onStart(cfg, structuredPlan);
+      return;
+    }
+
+    // Call server-side document analysis
+    setAnalyzing(true);
+    try {
+      const res = await fetch("/api/interview/analyze-documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          resumeText: cfg.resumeText || "",
+          jdText: cfg.jdText || "",
+          interviewType: cfg.type,
+          experienceLevel: cfg.level,
+          lang: cfg.lang,
+          count: cfg.questionCount,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Server returned HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      const updatedConfig: AppConfig = {
+        ...cfg,
+        role: data.detectedRole || cfg.role,
+        level: data.detectedLevel || cfg.level,
+        analysis: {
+          detectedRole: data.detectedRole,
+          detectedLevel: data.detectedLevel,
+          summary: data.summary,
+          requiredSkills: data.requiredSkills || [],
+          candidateSkills: data.candidateSkills || [],
+          matchedSkills: data.matchedSkills || [],
+          gapSkills: data.gapSkills || [],
+          keyTopics: [],
+        },
+      };
+
+      const finalQuestions: ActiveQuestion[] = (data.questions || []).map(
+        (q: Partial<ActiveQuestion>) => ({
+          id: q.id || `gen_${Math.random()}`,
+          stage: q.stage,
+          stageNumber: q.stageNumber,
+          totalStages: q.totalStages,
+          category: q.category || "technical",
+          text: q.text,
+          hindiText: q.hindiText,
+          teluguText: q.teluguText,
+          transitionIntro: q.transitionIntro,
+          contextWhyAsked: q.contextWhyAsked || "Resume & JD alignment",
+          expectedKeywords: q.expectedKeywords || [],
+          tip: q.tip || "Structure your answer clearly with concrete examples.",
+          isCodingChallenge: q.isCodingChallenge,
+          codingLanguage: q.codingLanguage,
+          starterCode: q.starterCode,
+          sampleInputOutput: q.sampleInputOutput,
+        }),
+      );
+
+      // Ensure stage 1 is present and guaranteed
+      if (finalQuestions.length > 0 && finalQuestions[0].stage !== "stage_1_greeting") {
+        const fallbackPlan = buildStructuredInterviewPlan(updatedConfig);
+        onStart(updatedConfig, fallbackPlan);
+      } else {
+        onStart(
+          updatedConfig,
+          finalQuestions.length ? finalQuestions : buildStructuredInterviewPlan(updatedConfig),
+        );
+      }
+    } catch (err: unknown) {
+      console.warn("Direct analysis API failed, using structured screening plan fallback:", err);
+      const fallbackPlan = buildStructuredInterviewPlan({
+        name: cfg.name,
+        role: cfg.role,
+        level: cfg.level,
+        type: cfg.type,
+        lang: cfg.lang,
+        questionCount: cfg.questionCount,
+        resumeFileName: cfg.resumeFileName,
+        resumeText: cfg.resumeText,
+        jdFileName: cfg.jdFileName,
+        jdText: cfg.jdText,
+      });
+      onStart(cfg, fallbackPlan);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   return (
-    <div className="grid items-center gap-8 lg:grid-cols-[1.05fr_1fr]">
-      <section className="relative overflow-hidden rounded-3xl bg-hero p-8 text-navy-foreground shadow-soft sm:p-10">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-navy-foreground/70">Voice mock interview</p>
-        <h1 className="mt-3 text-3xl font-semibold leading-tight sm:text-4xl">Meet Maya, your<br />practice interviewer.</h1>
-        <p className="mt-3 max-w-md text-sm text-navy-foreground/80">
-          She asks questions out loud, listens to your answers, and gives you a scored report — in English, Hindi or Telugu.
+    <div className="grid items-start gap-8 lg:grid-cols-[1.05fr_1.15fr]">
+      {/* Left Column: Interviewer Studio Showcase */}
+      <section className="relative overflow-hidden rounded-3xl bg-hero p-6 text-navy-foreground shadow-soft sm:p-8 flex flex-col items-center text-center">
+        <div className="inline-flex items-center gap-2 rounded-full bg-navy-foreground/10 px-3.5 py-1 text-xs font-semibold uppercase tracking-wider text-navy-foreground/80">
+          <BrainCircuit className="h-3.5 w-3.5 text-violet" />
+          <span>Automated Technical Screening</span>
+        </div>
+
+        <h1 className="mt-4 font-display text-2xl font-bold leading-tight sm:text-3xl text-balance">
+          Meet Tesla, your executive mock interviewer.
+        </h1>
+
+        <p className="mt-2.5 max-w-md text-xs sm:text-sm text-navy-foreground/80 leading-relaxed">
+          Simulate a realistic, multi-stage campus technical screening interview. Covers your
+          self-introduction, resume projects, technical competencies, live coding/SQL problem, and
+          scenario reasoning.
         </p>
-        <div className="mt-8 flex justify-center"><Avatar size={170} /></div>
-        <div className="mt-6 grid grid-cols-3 gap-3 text-center text-xs">
-          {[[String(BANK.length), "questions"], ["3", "languages"], ["0", "API keys"]].map(([n, l]) => (
-            <div key={l} className="rounded-xl bg-navy-foreground/10 py-3"><div className="font-display text-xl font-semibold">{n}</div>{l}</div>
-          ))}
+
+        {/* Featured Interviewer Avatar Frame */}
+        <div className="my-6">
+          <Avatar size={200} showStatusBadge interviewerName="Tesla" />
+        </div>
+
+        {/* Feature Highlights Grid */}
+        <div className="w-full grid grid-cols-3 gap-2.5 text-xs text-navy-foreground/90">
+          <div className="rounded-2xl bg-navy-foreground/10 p-3 flex flex-col items-center">
+            <span className="font-display text-lg font-bold">7 Stages</span>
+            <span className="text-[11px] text-navy-foreground/75">Screening Flow</span>
+          </div>
+          <div className="rounded-2xl bg-navy-foreground/10 p-3 flex flex-col items-center">
+            <span className="font-display text-lg font-bold">Coding/SQL</span>
+            <span className="text-[11px] text-navy-foreground/75">Hands-on Challenge</span>
+          </div>
+          <div className="rounded-2xl bg-navy-foreground/10 p-3 flex flex-col items-center">
+            <span className="font-display text-lg font-bold">3 Langs</span>
+            <span className="text-[11px] text-navy-foreground/75">EN / HI / TE</span>
+          </div>
+        </div>
+
+        {/* Voice Studio Preview Box */}
+        <div className="mt-5 w-full rounded-2xl bg-navy-foreground/10 p-4 text-left border border-white/10">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs font-semibold">
+              <Volume2 className="h-4 w-4 text-violet" />
+              <span>Speech Engine Voice Studio</span>
+            </div>
+            <button
+              type="button"
+              onClick={handlePreviewVoice}
+              disabled={previewingVoice || !ttsSupported()}
+              className="rounded-lg bg-navy-foreground/20 px-2.5 py-1 text-xs font-medium hover:bg-navy-foreground/30 transition flex items-center gap-1.5"
+            >
+              {previewingVoice ? "Playing…" : "Test Voice"}
+            </button>
+          </div>
+          <div className="mt-2.5 grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <span className="text-[11px] text-navy-foreground/70">Selected Voice</span>
+              <p className="truncate font-medium">
+                {voices.find((v) => v.voiceURI === cfg.selectedVoiceURI)?.name ||
+                  "Natural Indian English Male (System)"}
+              </p>
+            </div>
+            <div>
+              <span className="text-[11px] text-navy-foreground/70">
+                Speech Speed: {cfg.speechRate}x
+              </span>
+              <input
+                type="range"
+                min="0.75"
+                max="1.25"
+                step="0.05"
+                value={cfg.speechRate}
+                onChange={(e) => update("speechRate", parseFloat(e.target.value))}
+                className="w-full h-1 mt-1 accent-violet bg-white/30 rounded-lg cursor-pointer"
+              />
+            </div>
+          </div>
         </div>
       </section>
 
-      <form className="rounded-3xl border bg-card p-6 shadow-soft sm:p-8" onSubmit={(e) => { e.preventDefault(); onStart(c); }}>
-        <h2 className="text-xl font-semibold">Set up your interview</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Takes about {c.count * 2} minutes.</p>
-        <div className="mt-6 grid gap-4 sm:grid-cols-2">
-          <label className="sm:col-span-2 text-sm font-medium">Name <span className="text-muted-foreground font-normal">(optional)</span>
-            <input className={cn(field, "mt-1.5")} value={c.name} maxLength={40} placeholder="e.g. Priya" onChange={(e) => set("name", e.target.value)} />
-          </label>
-          <label className="text-sm font-medium">Job role
-            <select className={cn(field, "mt-1.5")} value={c.role} onChange={(e) => set("role", e.target.value)}>
-              {ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
-            </select>
-          </label>
-          <label className="text-sm font-medium">Experience
-            <select className={cn(field, "mt-1.5")} value={c.level} onChange={(e) => set("level", e.target.value as Level)}>
-              <option value="fresher">Fresher</option><option value="junior">1–3 years</option>
-              <option value="mid">3–6 years</option><option value="senior">6+ years</option>
-            </select>
-          </label>
+      {/* Right Column: Configuration & Document Ingestion */}
+      <div className="rounded-3xl border border-border bg-card p-6 shadow-soft sm:p-8 space-y-6">
+        {/* Navigation Tabs */}
+        <div className="flex items-center justify-between border-b border-border pb-4">
+          <div>
+            <h2 className="text-xl font-bold font-display">Configure Screening Round</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Strict 7-stage sequence starting with Greeting and Self-Introduction
+            </p>
+          </div>
+
+          <div className="flex rounded-xl bg-muted p-1">
+            <button
+              type="button"
+              onClick={() => setActiveTab("documents")}
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                activeTab === "documents"
+                  ? "bg-card text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Documents & Presets
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("settings")}
+              className={cn(
+                "rounded-lg px-3 py-1.5 text-xs font-semibold transition",
+                activeTab === "settings"
+                  ? "bg-card text-foreground shadow-xs"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              Role & Voice
+            </button>
+          </div>
         </div>
-        <fieldset className="mt-5">
-          <legend className="text-sm font-medium">Interview type</legend>
-          <div className="mt-1.5 grid grid-cols-3 gap-2">
-            {(["hr", "technical", "aptitude"] as const).map((t) => (
-              <button type="button" key={t} onClick={() => set("type", t)} aria-pressed={c.type === t}
-                className={cn("rounded-lg border px-3 py-2.5 text-sm font-medium capitalize transition", c.type === t ? "border-primary bg-primary text-primary-foreground" : "hover:bg-muted")}>
-                {t === "hr" ? "HR" : t}
-              </button>
-            ))}
+
+        {/* Tab 1: Documents & Presets */}
+        {activeTab === "documents" && (
+          <div className="space-y-5">
+            {/* Quick Sample Presets */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Quick Load Placement Demo Presets
+                </span>
+                <span className="text-[11px] text-primary font-medium">1-Click Placement Demo</span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {SAMPLE_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => handleApplyPreset(preset)}
+                    className="flex flex-col text-left rounded-xl border border-border/80 bg-muted/40 p-2.5 hover:border-primary/60 hover:bg-muted transition text-xs group"
+                  >
+                    <span className="font-semibold text-foreground group-hover:text-primary transition line-clamp-1">
+                      {preset.title.split("(")[0]}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground mt-1 line-clamp-1">
+                      {preset.role}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Candidate Name Input */}
+            <div>
+              <label className="text-xs font-semibold text-foreground block mb-1">
+                Candidate Name (Optional)
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. Manideep or leave blank for general candidate"
+                value={cfg.name}
+                onChange={(e) => update("name", e.target.value)}
+                className={formFieldStyle}
+              />
+            </div>
+
+            {/* Resume Upload Card */}
+            <div className="rounded-2xl border border-dashed border-border p-4 bg-muted/20">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-semibold">Candidate Resume</span>
+                  <span className="text-[11px] text-muted-foreground">(PDF, DOCX, TXT)</span>
+                </div>
+                {cfg.resumeText && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      update("resumeFileName", "");
+                      update("resumeText", "");
+                    }}
+                    className="text-muted-foreground hover:text-destructive transition p-1"
+                    title="Remove resume"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              {cfg.resumeFileName ? (
+                <div className="mt-3 flex items-center justify-between rounded-xl bg-primary/10 border border-primary/20 px-3 py-2 text-xs">
+                  <span className="font-medium text-primary truncate max-w-[240px]">
+                    ✓ {cfg.resumeFileName}
+                  </span>
+                  <label className="cursor-pointer text-[11px] font-semibold text-primary underline">
+                    Replace file
+                    <input
+                      type="file"
+                      accept=".pdf,.docx,.doc,.txt"
+                      className="hidden"
+                      onChange={handleResumeUpload}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <label className="mt-3 flex flex-col items-center justify-center rounded-xl border border-border bg-card p-4 cursor-pointer hover:bg-muted/50 transition">
+                  <Upload className="h-5 w-5 text-muted-foreground mb-1" />
+                  <span className="text-xs font-semibold text-foreground">
+                    Upload Resume for Project Deep-Dive
+                  </span>
+                  <span className="text-[11px] text-muted-foreground mt-0.5">
+                    Tesla will discuss your actual projects without fabricating details
+                  </span>
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.doc,.txt"
+                    className="hidden"
+                    onChange={handleResumeUpload}
+                  />
+                </label>
+              )}
+            </div>
+
+            {/* Job Description Card */}
+            <div className="rounded-2xl border border-dashed border-border p-4 bg-muted/20">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-primary" />
+                  <span className="text-sm font-semibold">Target Job Description</span>
+                  <span className="text-[11px] text-muted-foreground">(PDF, DOCX, TXT)</span>
+                </div>
+                {cfg.jdText && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      update("jdFileName", "");
+                      update("jdText", "");
+                    }}
+                    className="text-muted-foreground hover:text-destructive transition p-1"
+                    title="Remove JD"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              {cfg.jdFileName ? (
+                <div className="mt-3 flex items-center justify-between rounded-xl bg-primary/10 border border-primary/20 px-3 py-2 text-xs">
+                  <span className="font-medium text-primary truncate max-w-[240px]">
+                    ✓ {cfg.jdFileName}
+                  </span>
+                  <label className="cursor-pointer text-[11px] font-semibold text-primary underline">
+                    Replace file
+                    <input
+                      type="file"
+                      accept=".pdf,.docx,.doc,.txt"
+                      className="hidden"
+                      onChange={handleJdUpload}
+                    />
+                  </label>
+                </div>
+              ) : (
+                <label className="mt-3 flex flex-col items-center justify-center rounded-xl border border-border bg-card p-4 cursor-pointer hover:bg-muted/50 transition">
+                  <Upload className="h-5 w-5 text-muted-foreground mb-1" />
+                  <span className="text-xs font-semibold text-foreground">
+                    Upload Target Job Description
+                  </span>
+                  <span className="text-[11px] text-muted-foreground mt-0.5">
+                    Calibrates technical competencies & coding problems to role requirements
+                  </span>
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.doc,.txt"
+                    className="hidden"
+                    onChange={handleJdUpload}
+                  />
+                </label>
+              )}
+            </div>
+
+            {/* Sequence Preview Box */}
+            <div className="rounded-2xl bg-muted/40 p-4 border border-border/70 text-xs space-y-2">
+              <div className="flex items-center gap-1.5 font-semibold text-foreground">
+                <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                <span>Screening Stage Sequence Guaranteed:</span>
+              </div>
+              <ol className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-muted-foreground text-[11px] pl-1">
+                <li>1. Greeting & Self-Introduction</li>
+                <li>2. Education & Resume Projects</li>
+                <li>3. JD & Technical Foundations</li>
+                <li>4. Hands-on Coding or SQL Challenge</li>
+                <li>5. Practical Problem Scenario</li>
+                <li>6. HR & Behavioral (STAR)</li>
+                <li>7. Professional Closing & Report</li>
+              </ol>
+            </div>
+
+            {analysisError && (
+              <p className="text-xs text-destructive bg-destructive/10 border border-destructive/20 p-3 rounded-xl">
+                {analysisError}
+              </p>
+            )}
           </div>
-        </fieldset>
-        <fieldset className="mt-5">
-          <legend className="text-sm font-medium">Language</legend>
-          <div className="mt-1.5 grid grid-cols-3 gap-2">
-            {(Object.keys(LANG_NAMES) as Lang[]).map((l) => (
-              <button type="button" key={l} onClick={() => set("lang", l)} aria-pressed={c.lang === l}
-                className={cn("rounded-lg border px-2 py-2.5 text-xs font-medium sm:text-sm transition", c.lang === l ? "border-violet bg-accent text-accent-foreground" : "hover:bg-muted")}>
-                {LANG_NAMES[l].split(" (")[0]}
-              </button>
-            ))}
+        )}
+
+        {/* Tab 2: Role & Voice Settings */}
+        {activeTab === "settings" && (
+          <div className="space-y-4">
+            {/* Target Role & Level */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-xs font-semibold">
+                Target Role
+                <select
+                  value={cfg.role}
+                  onChange={(e) => update("role", e.target.value)}
+                  className={cn(formFieldStyle, "mt-1.5")}
+                >
+                  {ROLES.map((r) => (
+                    <option key={r} value={r}>
+                      {r}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="text-xs font-semibold">
+                Experience Level
+                <select
+                  value={cfg.level}
+                  onChange={(e) => update("level", e.target.value as Level)}
+                  className={cn(formFieldStyle, "mt-1.5")}
+                >
+                  <option value="fresher">Fresher / Graduate Placement</option>
+                  <option value="junior">Junior (1–3 yrs)</option>
+                  <option value="mid">Mid-level (3–6 yrs)</option>
+                  <option value="senior">Senior (6+ yrs)</option>
+                </select>
+              </label>
+            </div>
+
+            {/* Interview Type */}
+            <label className="text-xs font-semibold block">
+              Interview Evaluation Focus
+              <select
+                value={cfg.type}
+                onChange={(e) => update("type", e.target.value as AppConfig["type"])}
+                className={cn(formFieldStyle, "mt-1.5")}
+              >
+                <option value="mixed">Comprehensive Screening (Technical + Coding + HR)</option>
+                <option value="technical">Technical Only (Omits HR Stage)</option>
+              </select>
+            </label>
+
+            {/* Language Selector */}
+            <div>
+              <span className="text-xs font-semibold block mb-1.5">Interview Language</span>
+              <div className="grid grid-cols-3 gap-2">
+                {(Object.keys(LANG_NAMES) as Lang[]).map((l) => (
+                  <button
+                    key={l}
+                    type="button"
+                    onClick={() => update("lang", l)}
+                    className={cn(
+                      "rounded-xl border px-3 py-2 text-xs font-semibold transition",
+                      cfg.lang === l
+                        ? "border-violet bg-violet/10 text-violet"
+                        : "border-border hover:bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {LANG_NAMES[l].split(" (")[0]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Voice Dropdown */}
+            {ttsSupported() && voices.length > 0 && (
+              <div>
+                <label className="text-xs font-semibold block mb-1">
+                  Browser Text-to-Speech Voice (Natural Male Preferred)
+                </label>
+                <select
+                  value={cfg.selectedVoiceURI}
+                  onChange={(e) => update("selectedVoiceURI", e.target.value)}
+                  className={cn(formFieldStyle, "text-xs")}
+                >
+                  {voices.map((v) => (
+                    <option key={v.voiceURI} value={v.voiceURI}>
+                      {v.name} ({v.lang})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-muted-foreground mt-1">
+                  Default prioritizes Indian English (en-IN) natural male voices when available.
+                </p>
+              </div>
+            )}
           </div>
-          {c.lang !== "en" && c.type === "technical" && (
-            <p className="mt-2 text-xs text-muted-foreground">Some technical questions are only available in English and will be shown in English.</p>
+        )}
+
+        {/* Start Button */}
+        <button
+          type="button"
+          onClick={handleBeginInterview}
+          disabled={analyzing}
+          className="w-full rounded-2xl bg-primary py-3.5 px-6 font-display text-sm font-semibold text-primary-foreground shadow-soft transition hover:opacity-90 active:scale-[0.99] flex items-center justify-center gap-2 disabled:opacity-50"
+        >
+          {analyzing ? (
+            <>
+              <Sparkles className="h-4 w-4 animate-spin" />
+              <span>Analyzing Documents & Calibrating Screening Stages…</span>
+            </>
+          ) : (
+            <>
+              <span>Start Technical Screening with Tesla</span>
+              <ChevronRight className="h-4 w-4" />
+            </>
           )}
-          {voiceInfo && <p className="mt-2 text-xs text-warning">{voiceInfo}</p>}
-        </fieldset>
-        <label className="mt-5 block text-sm font-medium">Questions: <span className="text-primary">{c.count}</span>
-          <input type="range" min={3} max={poolSize} value={c.count} onChange={(e) => set("count", +e.target.value)} className="mt-2 w-full accent-[var(--primary)]" />
-        </label>
-        <button type="submit" className="mt-6 w-full rounded-xl bg-primary py-3.5 font-semibold text-primary-foreground shadow-soft transition hover:opacity-90 active:scale-[0.99]">
-          Start interview →
         </button>
-      </form>
+      </div>
     </div>
   );
 }
 
-/* ---------------- Interview ---------------- */
-function Interview({ session, onAnswer, onEnd }: {
-  session: Session; onAnswer: (r: Response, end?: boolean) => void; onEnd: () => void;
+/* =========================================================================
+   2. LIVE INTERVIEW VIEW (Video-call Studio, Coding Challenge, Mic/Text)
+   ========================================================================= */
+
+function LiveInterviewView({
+  session,
+  onAnswer,
+  onEndInterview,
+}: {
+  session: InterviewSession;
+  onAnswer: (response: InterviewResponse, forceEnd?: boolean) => void;
+  onEndInterview: () => void;
 }) {
-  const { config, qids, index } = session;
-  const q = BANK.find((b) => b.id === qids[index]) as Question | undefined;
-  const [speaking, setSpeaking] = useState(false);
+  const { config, questions, index } = session;
+  const currentQ = questions[index];
+
+  // Visual & Interviewer States
+  const [avatarState, setAvatarState] = useState<AvatarState>("idle");
+  const [activeInputMode, setActiveInputMode] = useState<"voice" | "text">("voice");
+
+  // Candidate Answer State
+  const [candidateAnswer, setCandidateAnswer] = useState("");
+  const [codeAnswer, setCodeAnswer] = useState(currentQ?.starterCode || "");
+  const [interimTranscript, setInterimTranscript] = useState("");
   const [listening, setListening] = useState(false);
-  const [answer, setAnswer] = useState("");
-  const [interim, setInterim] = useState("");
-  const [error, setError] = useState("");
-  const recRef = useRef<ReturnType<typeof createRecognizer> | null>(null);
+  const [micError, setMicError] = useState("");
+  const [evaluating, setEvaluating] = useState(false);
+
+  const recognizerRef = useRef<ReturnType<typeof createRecognizer> | null>(null);
+  const startTimeRef = useRef<number>(Date.now());
   const stt = useMemo(() => sttSupported(), []);
-  const shown = q ? questionText(q, config.lang) : null;
 
-  const say = () => {
-    if (!shown) return;
-    const intro = index === 0 && config.name ? `${greet(config.lang, config.name)} ` : "";
-    speak(intro + shown.text, LANG_CODES[shown.lang], { start: () => setSpeaking(true), end: () => setSpeaking(false) });
+  // Determine localized question text
+  const localizedQuestionText = useMemo(() => {
+    if (!currentQ) return "";
+    if (config.lang === "hi" && currentQ.hindiText) return currentQ.hindiText;
+    if (config.lang === "te" && currentQ.teluguText) return currentQ.teluguText;
+    return currentQ.text;
+  }, [currentQ, config.lang]);
+
+  // Determine transition intro text
+  const localizedTransitionIntro = useMemo(() => {
+    if (!currentQ) return "";
+    if (config.lang === "hi" && currentQ.hindiTransitionIntro) return currentQ.hindiTransitionIntro;
+    if (config.lang === "te" && currentQ.teluguTransitionIntro)
+      return currentQ.teluguTransitionIntro;
+    return currentQ.transitionIntro || "";
+  }, [currentQ, config.lang]);
+
+  // Speak question aloud with natural greeting / transition
+  const speakCurrentQuestion = () => {
+    if (!currentQ || !ttsSupported()) return;
+
+    // Full spoken utterance combines transition + question without duplicating
+    const fullSpoken = localizedTransitionIntro
+      ? `${localizedTransitionIntro} ${localizedQuestionText}`
+      : localizedQuestionText;
+
+    speak(fullSpoken, getLocaleCode(config.lang), {
+      voiceURI: config.selectedVoiceURI,
+      rate: config.speechRate,
+      onStart: () => setAvatarState("speaking"),
+      onEnd: () => setAvatarState("idle"),
+      onError: () => setAvatarState("idle"),
+    });
   };
 
+  // Trigger speech when question changes & update starter code
   useEffect(() => {
-    setAnswer(""); setInterim(""); setError("");
-    say();
-    return () => { stopSpeaking(); recRef.current?.abort(); };
-  }, [index]); // eslint-disable-line
+    setCandidateAnswer("");
+    setCodeAnswer(currentQ?.starterCode || "");
+    setInterimTranscript("");
+    setMicError("");
+    startTimeRef.current = Date.now();
+    speakCurrentQuestion();
 
-  if (!q || !shown) return <div className="text-center text-muted-foreground">No questions available. <button className="underline" onClick={onEnd}>View report</button></div>;
+    return () => {
+      stopSpeaking();
+      recognizerRef.current?.abort();
+    };
+  }, [index]);
 
-  const toggleMic = () => {
-    setError("");
-    if (listening) { recRef.current?.stop(); return; }
-    stopSpeaking(); setSpeaking(false);
+  if (!currentQ) {
+    return (
+      <div className="text-center py-16 space-y-4">
+        <p className="text-muted-foreground text-sm">All screening stages completed.</p>
+        <button
+          onClick={onEndInterview}
+          className="rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground"
+        >
+          View Comprehensive Report →
+        </button>
+      </div>
+    );
+  }
+
+  // Toggle Microphone
+  const handleToggleMic = () => {
+    setMicError("");
+
+    if (listening) {
+      recognizerRef.current?.stop();
+      setListening(false);
+      setAvatarState("idle");
+      return;
+    }
+
+    // Stop interviewer speech before listening
+    stopSpeaking();
+    setAvatarState("listening");
+
     try {
-      const rec = createRecognizer(LANG_CODES[config.lang], {
-        onText: (fin, int) => { if (fin) setAnswer((a) => (a + " " + fin).trim()); setInterim(int); },
-        onEnd: () => { setListening(false); setInterim(""); },
-        onError: (m) => setError(m),
+      const rec = createRecognizer(getLocaleCode(config.lang), {
+        onFinalChunk: (finalText) => {
+          setCandidateAnswer((prev) =>
+            prev ? `${prev.trim()} ${finalText.trim()}` : finalText.trim(),
+          );
+          setInterimTranscript("");
+        },
+        onInterimChunk: (interimText) => {
+          setInterimTranscript(interimText);
+        },
+        onEnd: () => {
+          setListening(false);
+          setAvatarState("idle");
+          setInterimTranscript("");
+        },
+        onError: (msg) => {
+          setMicError(msg);
+          setListening(false);
+          setAvatarState("idle");
+        },
       });
-      recRef.current = rec; rec.start(); setListening(true);
-    } catch { setError("Could not start the microphone. Please type your answer."); }
+
+      recognizerRef.current = rec;
+      rec.start();
+      setListening(true);
+    } catch {
+      setMicError("Microphone could not be started in this browser. Please type your response.");
+      setAvatarState("idle");
+    }
   };
 
-  const submit = (skip = false, end = false) => {
-    recRef.current?.abort(); stopSpeaking();
-    const text = skip ? "" : answer;
-    onAnswer({ qid: q.id, answer: text, evaluation: evaluate(q, text) }, end);
+  // Submit Answer & Evaluate
+  const handleSubmitAnswer = async (skip = false, forceEnd = false) => {
+    recognizerRef.current?.abort();
+    stopSpeaking();
+    setListening(false);
+    setAvatarState("thinking");
+    setEvaluating(true);
+
+    const verbalAnswer = skip ? "" : candidateAnswer.trim();
+    const combinedAnswer =
+      currentQ.isCodingChallenge && codeAnswer.trim()
+        ? `CODE IMPLEMENTATION:\n\`\`\`${currentQ.codingLanguage || "text"}\n${codeAnswer.trim()}\n\`\`\`\n\nVERBAL EXPLANATION:\n${verbalAnswer || "Candidate submitted code without separate verbal notes."}`
+        : verbalAnswer;
+
+    const timeSpent = Math.max(5, Math.round((Date.now() - startTimeRef.current) / 1000));
+
+    try {
+      const response = await fetch("/api/interview/evaluate-response", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: currentQ.text,
+          answer: combinedAnswer,
+          contextWhyAsked: currentQ.contextWhyAsked,
+          expectedKeywords: currentQ.expectedKeywords,
+          lang: config.lang,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Evaluation endpoint failed");
+      }
+
+      const evalData = await response.json();
+      const detailedEval: DetailedEvaluation = {
+        score: evalData.score ?? 5,
+        metrics: evalData.metrics ?? {
+          technicalKnowledge: 5,
+          communication: 5,
+          problemSolving: 5,
+          jdRelevance: 5,
+        },
+        strengths: evalData.strengths ?? ["Addressed question."],
+        areasToImprove: evalData.areasToImprove ?? ["Expand on concepts."],
+        coachingFeedback: evalData.coachingFeedback ?? "Solid effort.",
+        sampleModelAnswer: evalData.sampleModelAnswer ?? "Structured example.",
+      };
+
+      onAnswer(
+        {
+          qid: currentQ.id,
+          stageNumber: currentQ.stageNumber,
+          category: currentQ.category,
+          questionText: localizedQuestionText,
+          answer: combinedAnswer,
+          codeSnippet: currentQ.isCodingChallenge ? codeAnswer : undefined,
+          evaluation: detailedEval,
+          timeSpentSec: timeSpent,
+        },
+        forceEnd,
+      );
+    } catch {
+      // Local evaluation fallback
+      const localEval = evaluate(
+        {
+          id: currentQ.id,
+          role: "general",
+          level: "fresher",
+          type: "technical",
+          category: "technical",
+          question: currentQ.text,
+          keywords: currentQ.expectedKeywords,
+          tip: currentQ.tip,
+          minWords: 20,
+        },
+        combinedAnswer,
+      );
+
+      onAnswer(
+        {
+          qid: currentQ.id,
+          stageNumber: currentQ.stageNumber,
+          category: currentQ.category,
+          questionText: localizedQuestionText,
+          answer: combinedAnswer,
+          codeSnippet: currentQ.isCodingChallenge ? codeAnswer : undefined,
+          evaluation: {
+            score: localEval.score,
+            metrics: {
+              technicalKnowledge: localEval.score,
+              communication: Math.min(10, Math.round(combinedAnswer.split(/\s+/).length / 4)),
+              problemSolving: 6,
+              jdRelevance: localEval.score,
+            },
+            strengths: ["Attempted response under practice conditions."],
+            areasToImprove: ["Incorporate more concrete examples and STAR framework."],
+            coachingFeedback: localEval.feedback,
+            sampleModelAnswer: currentQ.tip,
+          },
+          timeSpentSec: timeSpent,
+        },
+        forceEnd,
+      );
+    } finally {
+      setEvaluating(false);
+      setAvatarState("idle");
+    }
   };
 
-  const pct = ((index) / qids.length) * 100;
+  const currentStageConfig = currentQ.stage ? STAGE_CONFIGS[currentQ.stage] : null;
+  const stageDisplayName = currentStageConfig
+    ? config.lang === "hi"
+      ? currentStageConfig.hindiName
+      : config.lang === "te"
+        ? currentStageConfig.teluguName
+        : currentStageConfig.name
+    : `Stage ${currentQ.stageNumber ?? index + 1}`;
+
+  const progressPercent = Math.round(((index + 1) / questions.length) * 100);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-      <aside className="flex flex-col items-center rounded-3xl bg-hero p-6 text-navy-foreground shadow-soft">
-        <Avatar speaking={speaking} listening={listening} size={150} />
-        <p className="mt-3 font-display font-semibold">Maya</p>
-        <p className="text-xs text-navy-foreground/75" role="status" aria-live="polite">
-          {speaking ? "Speaking…" : listening ? "Listening to you…" : "Waiting for your answer"}
-        </p>
-        <div className="mt-5 w-full text-xs text-navy-foreground/80">
-          <div className="flex justify-between"><span>Question {index + 1} of {qids.length}</span><span>{Math.round(pct)}%</span></div>
-          <div className="mt-1.5 h-1.5 rounded-full bg-navy-foreground/15"><div className="h-full rounded-full bg-success transition-all" style={{ width: `${pct}%` }} /></div>
+    <div className="grid gap-6 lg:grid-cols-[340px_1fr] items-start">
+      {/* Left Column: Video-Call Telepresence Card */}
+      <aside className="rounded-3xl bg-hero p-6 text-navy-foreground shadow-soft flex flex-col items-center border border-white/10">
+        <div className="w-full flex items-center justify-between text-xs text-navy-foreground/75 mb-3">
+          <span className="font-semibold uppercase tracking-wider text-[11px]">
+            {stageDisplayName}
+          </span>
+          <span className="font-mono tabular-nums">
+            {index + 1} of {questions.length}
+          </span>
+        </div>
+
+        {/* Male Interviewer Avatar Frame */}
+        <Avatar size={200} state={avatarState} showStatusBadge interviewerName="Tesla" />
+
+        {/* Stage Progress Checklist */}
+        <div className="mt-5 w-full text-xs text-navy-foreground/80 space-y-2">
+          <div className="flex justify-between items-center text-[11px]">
+            <span>Screening Progress</span>
+            <span className="font-mono font-bold">{progressPercent}%</span>
+          </div>
+          <div className="h-2 w-full rounded-full bg-navy-foreground/15 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-emerald-400 transition-all duration-300"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+
+          {/* Mini stage dots */}
+          <div className="flex items-center justify-between pt-1">
+            {questions.map((q, i) => (
+              <div
+                key={q.id}
+                title={`Stage ${i + 1}: ${q.category}`}
+                className={cn(
+                  "h-1.5 rounded-full transition-all duration-300",
+                  i === index
+                    ? "w-4 bg-emerald-400"
+                    : i < index
+                      ? "w-2 bg-emerald-400/70"
+                      : "w-2 bg-navy-foreground/20",
+                )}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Session Metadata Badges */}
+        <div className="mt-5 w-full pt-4 border-t border-white/10 flex flex-col gap-1.5 text-xs text-navy-foreground/75">
+          <div className="flex justify-between">
+            <span className="text-navy-foreground/60">Target Role:</span>
+            <span className="font-medium truncate max-w-[170px]">{config.role}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-navy-foreground/60">Stage:</span>
+            <span className="font-medium truncate max-w-[170px]">
+              {currentQ.category.replace("_", " ")}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-navy-foreground/60">Language:</span>
+            <span className="font-medium">{LANG_NAMES[config.lang]}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-navy-foreground/60">Privacy:</span>
+            <span className="font-medium text-emerald-400">Local Client Audio</span>
+          </div>
         </div>
       </aside>
 
-      <section className="rounded-3xl border bg-card p-5 shadow-soft sm:p-8">
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="rounded-full bg-secondary px-2.5 py-1 font-medium uppercase tracking-wide text-secondary-foreground">{q.category === "aiml" ? "AI/ML" : q.category}</span>
-          {shown.lang !== config.lang && <span className="rounded-full bg-accent px-2.5 py-1 text-accent-foreground">Shown in English</span>}
-        </div>
-        <h2 key={q.id} className="mt-4 text-xl font-semibold leading-snug animate-in fade-in slide-in-from-bottom-2 sm:text-2xl" lang={shown.lang}>{shown.text}</h2>
-
-        <div className="mt-6">
-          <label htmlFor="ans" className="text-sm font-medium">Your answer</label>
-          <textarea id="ans" rows={6} value={answer + (interim ? " " + interim : "")} onChange={(e) => setAnswer(e.target.value)} readOnly={listening}
-            placeholder={stt ? "Tap the mic and speak, or type here…" : "Type your answer here…"} lang={config.lang}
-            className={cn(field, "mt-1.5 resize-y leading-relaxed", listening && "ring-2 ring-success")} />
-          <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-            <span>{answer.trim() ? answer.trim().split(/\s+/).length : 0} words</span>
-            {!stt && <span className="text-warning">Voice input isn't supported in this browser — please type.</span>}
+      {/* Right Column: Interactive Stage & Candidate Deck */}
+      <section className="rounded-3xl border border-border bg-card p-6 shadow-soft sm:p-8 space-y-6">
+        {/* Question Header & Context */}
+        <div>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-primary bg-primary/10 px-2.5 py-1 rounded-lg">
+              {stageDisplayName}
+            </span>
+            <button
+              type="button"
+              onClick={speakCurrentQuestion}
+              disabled={avatarState === "speaking" || !ttsSupported()}
+              className="text-xs font-semibold text-muted-foreground hover:text-foreground transition flex items-center gap-1.5"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span>Repeat Tesla's Question</span>
+            </button>
           </div>
-          {error && <p role="alert" className="mt-2 rounded-lg bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>}
+
+          <h2
+            key={currentQ.id}
+            className="text-xl sm:text-2xl font-bold leading-snug font-display text-foreground"
+          >
+            {localizedQuestionText}
+          </h2>
+
+          {currentQ.contextWhyAsked && (
+            <p className="mt-2 text-xs text-muted-foreground italic flex items-center gap-1.5">
+              <HelpCircle className="h-3.5 w-3.5 text-primary shrink-0" />
+              <span>Screening Objective: {currentQ.contextWhyAsked}</span>
+            </p>
+          )}
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          <button onClick={toggleMic} disabled={!stt}
-            className={cn("rounded-xl px-4 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40",
-              listening ? "bg-destructive text-destructive-foreground" : "bg-success text-success-foreground hover:opacity-90")}>
-            {listening ? "■ Stop mic" : "🎙 Start mic"}
-          </button>
-          <button onClick={say} disabled={!ttsSupported()} className="rounded-xl border px-4 py-2.5 text-sm font-medium hover:bg-muted disabled:opacity-40">↻ Repeat</button>
-          <button onClick={() => submit(true)} className="rounded-xl border px-4 py-2.5 text-sm font-medium hover:bg-muted">Skip</button>
-          <button onClick={() => submit(false)} disabled={!answer.trim()}
-            className="ml-auto rounded-xl bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-40">
-            {index + 1 === qids.length ? "Submit & finish" : "Submit answer →"}
+        {/* Coding & SQL Challenge Deck (When Stage 4 or isCodingChallenge is active) */}
+        {currentQ.isCodingChallenge && (
+          <div className="rounded-2xl border border-border bg-muted/30 p-4 space-y-3">
+            <div className="flex items-center justify-between border-b border-border/80 pb-2.5">
+              <div className="flex items-center gap-2">
+                <Code2 className="h-4 w-4 text-primary" />
+                <span className="text-xs font-bold uppercase tracking-wider">
+                  Live Coding / SQL Workspace ({currentQ.codingLanguage?.toUpperCase() || "CODE"})
+                </span>
+              </div>
+              <span className="text-[11px] font-mono text-muted-foreground">
+                Type code solution below
+              </span>
+            </div>
+
+            {currentQ.sampleInputOutput && (
+              <div className="rounded-xl bg-card p-2.5 border border-border/60 text-[11px] font-mono text-muted-foreground whitespace-pre-wrap">
+                {currentQ.sampleInputOutput}
+              </div>
+            )}
+
+            <textarea
+              rows={8}
+              value={codeAnswer}
+              onChange={(e) => setCodeAnswer(e.target.value)}
+              placeholder="Write your code or SQL query solution here..."
+              className={cn(
+                formFieldStyle,
+                "font-mono text-xs leading-relaxed bg-slate-950 text-emerald-400 border-slate-800 resize-y",
+              )}
+              spellCheck={false}
+            />
+          </div>
+        )}
+
+        {/* Input Controls (Voice vs Text Toggle) */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-semibold text-foreground">
+              {currentQ.isCodingChallenge
+                ? "Candidate Verbal Explanation & Approach"
+                : "Candidate Response (Microphone or Type)"}
+            </label>
+            <div className="flex rounded-lg bg-muted p-0.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setActiveInputMode("voice")}
+                className={cn(
+                  "rounded-md px-2.5 py-1 font-medium transition",
+                  activeInputMode === "voice"
+                    ? "bg-card text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Microphone
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveInputMode("text")}
+                className={cn(
+                  "rounded-md px-2.5 py-1 font-medium transition",
+                  activeInputMode === "text"
+                    ? "bg-card text-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                Type Answer
+              </button>
+            </div>
+          </div>
+
+          {/* Transcript / Text Area */}
+          <textarea
+            rows={4}
+            value={candidateAnswer + (interimTranscript ? ` ${interimTranscript}` : "")}
+            onChange={(e) => setCandidateAnswer(e.target.value)}
+            placeholder={
+              activeInputMode === "voice"
+                ? currentQ.isCodingChallenge
+                  ? "Click 'Start Speaking' to verbally explain your time complexity and algorithm, or type notes here…"
+                  : "Click 'Start Speaking' below to answer with your microphone, or type your response directly…"
+                : "Type your structured answer here (using clear points or the STAR method)…"
+            }
+            className={cn(
+              formFieldStyle,
+              "resize-y leading-relaxed font-sans",
+              listening && "ring-2 ring-emerald-500 border-emerald-500/50",
+            )}
+          />
+
+          {/* Word Count and Status */}
+          <div className="mt-1.5 flex items-center justify-between text-xs text-muted-foreground">
+            <span>
+              {candidateAnswer.trim() ? candidateAnswer.trim().split(/\s+/).length : 0} words
+            </span>
+            {listening && (
+              <span className="text-emerald-500 font-semibold animate-pulse flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                Listening attentively…
+              </span>
+            )}
+          </div>
+
+          {micError && (
+            <p className="mt-2 rounded-xl bg-destructive/10 border border-destructive/20 p-2.5 text-xs text-destructive">
+              {micError}
+            </p>
+          )}
+        </div>
+
+        {/* Call Action Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-border">
+          <div className="flex items-center gap-2">
+            {stt && (
+              <button
+                type="button"
+                onClick={handleToggleMic}
+                disabled={evaluating}
+                className={cn(
+                  "rounded-xl px-4 py-2.5 text-xs font-semibold shadow-xs transition flex items-center gap-2",
+                  listening
+                    ? "bg-destructive text-destructive-foreground hover:opacity-90"
+                    : "bg-emerald-600 text-white hover:bg-emerald-700",
+                )}
+              >
+                <Mic className={cn("h-4 w-4", listening && "animate-pulse")} />
+                <span>{listening ? "Stop Recording" : "Start Speaking"}</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => handleSubmitAnswer(true)}
+              disabled={evaluating}
+              className="rounded-xl border border-border px-3.5 py-2.5 text-xs font-medium text-muted-foreground hover:bg-muted transition"
+            >
+              Skip Stage
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => handleSubmitAnswer(false)}
+              disabled={
+                evaluating ||
+                (!candidateAnswer.trim() &&
+                  !interimTranscript &&
+                  (!currentQ.isCodingChallenge || !codeAnswer.trim()))
+              }
+              className="rounded-xl bg-primary px-5 py-2.5 text-xs font-semibold text-primary-foreground shadow-soft hover:opacity-90 transition disabled:opacity-40 flex items-center gap-1.5"
+            >
+              {evaluating ? (
+                <>
+                  <Sparkles className="h-3.5 w-3.5 animate-spin" />
+                  <span>Evaluating Answer…</span>
+                </>
+              ) : (
+                <>
+                  <span>
+                    {index + 1 === questions.length
+                      ? "Complete Screening & View Report"
+                      : "Submit Answer →"}
+                  </span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* End Interview Early Escape Hatch */}
+        <div className="text-center pt-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (candidateAnswer.trim() || (currentQ.isCodingChallenge && codeAnswer.trim())) {
+                handleSubmitAnswer(false, true);
+              } else {
+                onEndInterview();
+              }
+            }}
+            className="text-xs text-muted-foreground hover:text-destructive underline-offset-4 hover:underline transition"
+          >
+            Conclude interview early and generate report
           </button>
         </div>
-        <button onClick={() => { if (confirm("End the interview now? Unanswered questions won't be scored.")) { answer.trim() ? submit(false, true) : onEnd(); } }}
-          className="mt-4 text-sm text-muted-foreground underline-offset-4 hover:text-destructive hover:underline">End interview</button>
       </section>
     </div>
   );
 }
 
-function greet(lang: Lang, name: string) {
-  return lang === "hi" ? `नमस्ते ${name}, चलिए शुरू करते हैं।` : lang === "te" ? `నమస్కారం ${name}, ప్రారంభిద్దాం.` : `Hello ${name}, let's begin.`;
-}
+/* =========================================================================
+   3. REPORT VIEW (Quad-metric rubric, Skill Gaps, Question Feedback, PDF Export)
+   ========================================================================= */
 
-/* ---------------- Report ---------------- */
-function Report({ session, onRestart, onRetry }: { session: Session; onRestart: () => void; onRetry: () => void }) {
-  const { responses, config, qids } = session;
-  const role = ROLES.find((r) => r.id === config.role)?.label ?? "";
-  const answered = responses.filter((r) => !r.evaluation.skipped);
-  const overall = qids.length ? Math.round((responses.reduce((a, r) => a + r.evaluation.score, 0) / qids.length) * 10) / 10 : 0;
-  const best = [...answered].sort((a, b) => b.evaluation.score - a.evaluation.score);
+function ReportView({
+  session,
+  onRestart,
+  onRetry,
+}: {
+  session: InterviewSession;
+  onRestart: () => void;
+  onRetry: () => void;
+}) {
+  const { responses, config, questions } = session;
+  const answeredCount = responses.filter((r) => r.answer.trim().length > 0).length;
 
-  const strengths: string[] = [];
-  const improve: string[] = [];
-  if (answered.length === qids.length && qids.length) strengths.push("Attempted every question — great persistence.");
-  if (best[0] && best[0].evaluation.score >= 7) strengths.push(`Strong answer on: "${qt(best[0].qid)}"`);
-  if (answered.some((r) => r.evaluation.matched.length >= 4)) strengths.push("Used relevant terminology and key concepts.");
-  if (answered.length && answered.reduce((a, r) => a + r.answer.split(/\s+/).length, 0) / answered.length > 40) strengths.push("Gave detailed, well-developed answers.");
-  if (responses.length < qids.length) improve.push(`Interview ended early — ${qids.length - responses.length} question(s) unanswered.`);
-  if (responses.some((r) => r.evaluation.skipped)) improve.push("Avoid skipping; a partial answer always scores better than none.");
-  if (answered.some((r) => r.evaluation.score < 5)) improve.push("Expand short answers with examples and reasoning.");
-  if (config.type !== "aptitude") improve.push("Practise the STAR method (Situation, Task, Action, Result) for structured answers.");
-  if (!strengths.length) strengths.push("You showed up and practised — that's the first step!");
+  // Calculate composite scores
+  const totalScore = responses.reduce((acc, r) => acc + r.evaluation.score, 0);
+  const overallScore = responses.length ? Math.round((totalScore / responses.length) * 10) / 10 : 0;
 
-  const verdict = overall >= 8 ? "Excellent" : overall >= 6 ? "Good" : overall >= 4 ? "Developing" : "Needs practice";
+  // Metric averages
+  const avgTechnical =
+    Math.round(
+      (responses.reduce((acc, r) => acc + r.evaluation.metrics.technicalKnowledge, 0) /
+        Math.max(1, responses.length)) *
+        10,
+    ) / 10;
+  const avgCommunication =
+    Math.round(
+      (responses.reduce((acc, r) => acc + r.evaluation.metrics.communication, 0) /
+        Math.max(1, responses.length)) *
+        10,
+    ) / 10;
+  const avgProblemSolving =
+    Math.round(
+      (responses.reduce((acc, r) => acc + r.evaluation.metrics.problemSolving, 0) /
+        Math.max(1, responses.length)) *
+        10,
+    ) / 10;
+  const avgJdRelevance =
+    Math.round(
+      (responses.reduce((acc, r) => acc + r.evaluation.metrics.jdRelevance, 0) /
+        Math.max(1, responses.length)) *
+        10,
+    ) / 10;
 
-  const download = () => {
+  const verdict =
+    overallScore >= 8.0
+      ? "Outstanding Screening Readiness"
+      : overallScore >= 6.5
+        ? "Placement Ready with Refinements"
+        : overallScore >= 5.0
+          ? "Developing Technical Foundations"
+          : "Needs Focused Preparation";
+
+  // Text export function
+  const handleDownloadReport = () => {
     const lines = [
-      `InterviewMate AI — Practice Report`, `Candidate: ${config.name || "Anonymous"}`, `Role: ${role} | Level: ${config.level} | Type: ${config.type} | Language: ${LANG_NAMES[config.lang]}`,
-      `Date: ${new Date(session.startedAt).toLocaleString()}`, `Overall: ${overall}/10 (${verdict})`, "",
-      ...qids.map((id, i) => { const r = responses.find((x) => x.qid === id);
-        return `Q${i + 1}. ${qt(id, config.lang)}\nAnswer: ${r ? r.answer || "(skipped)" : "(not reached)"}\nScore: ${r ? r.evaluation.score : 0}/10\nFeedback: ${r?.evaluation.feedback ?? "-"}\n`; }),
-      "Strengths:", ...strengths.map((x) => "- " + x), "", "Areas to improve:", ...improve.map((x) => "- " + x), "",
-      "Disclaimer: practice demo with local keyword-based scoring; not a real hiring assessment.",
+      "===========================================================",
+      " INTERVIEWMATE AI — AUTOMATED TECHNICAL SCREENING REPORT",
+      "===========================================================",
+      `Candidate Name: ${config.name || "Anonymous Candidate"}`,
+      `Target Role: ${config.role} (${config.level.toUpperCase()})`,
+      `Screening Focus: ${config.type.toUpperCase()}`,
+      `Interview Language: ${LANG_NAMES[config.lang]}`,
+      `Date & Time: ${new Date(session.startedAt || Date.now()).toLocaleString()}`,
+      `Stages Completed: ${answeredCount} / ${questions.length}`,
+      "-----------------------------------------------------------",
+      `OVERALL SCORE: ${overallScore} / 10 (${verdict})`,
+      `- Technical Knowledge: ${avgTechnical} / 10`,
+      `- Communication Clarity: ${avgCommunication} / 10`,
+      `- Problem Solving: ${avgProblemSolving} / 10`,
+      `- JD Relevance & Alignment: ${avgJdRelevance} / 10`,
+      "===========================================================",
+      "",
+      "STAGE-BY-STAGE EVALUATION & FEEDBACK:",
+      ...responses
+        .map((r, i) => [
+          `\n[STAGE ${r.stageNumber ?? i + 1} - ${r.category.toUpperCase()}]`,
+          `Question: ${r.questionText}`,
+          `Candidate Answer: ${r.answer || "(Skipped)"}`,
+          `Score: ${r.evaluation.score} / 10`,
+          `Feedback: ${r.evaluation.coachingFeedback}`,
+          `Recommended Answer Model: ${r.evaluation.sampleModelAnswer}`,
+          "-----------------------------------------------------------",
+        ])
+        .flat(),
+      "",
+      "DISCLAIMER: This report is an educational mock interview simulation inspired by campus automated screening patterns. It is an independent practice tool and does not represent an official corporate hiring decision or endorse proprietary vendor metrics.",
     ];
-    const url = URL.createObjectURL(new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" }));
-    const a = document.createElement("a"); a.href = url; a.download = `interviewmate-report-${Date.now()}.txt`; a.click(); URL.revokeObjectURL(url);
+
+    const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `InterviewMate-Screening-Report-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
     <div className="space-y-6">
-      <section className="print-card grid gap-6 rounded-3xl bg-hero p-6 text-navy-foreground shadow-soft sm:grid-cols-[auto_1fr] sm:p-8">
-        <div className="grid h-32 w-32 place-items-center rounded-full border-4 border-success/70 bg-navy-foreground/10">
-          <div className="text-center"><div className="font-display text-4xl font-semibold">{overall}</div><div className="text-xs">out of 10</div></div>
+      {/* Top Banner Card */}
+      <section className="print-card rounded-3xl bg-hero p-6 text-navy-foreground shadow-soft sm:p-8 grid gap-6 sm:grid-cols-[auto_1fr] items-center border border-white/10">
+        <div className="flex flex-col items-center justify-center rounded-2xl bg-navy-foreground/10 p-5 h-36 w-36 border border-white/10 mx-auto">
+          <span className="font-display text-4xl font-extrabold">{overallScore}</span>
+          <span className="text-xs text-navy-foreground/70 mt-1">out of 10</span>
         </div>
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-navy-foreground/70">Interview report</p>
-          <h1 className="mt-1 text-2xl font-semibold sm:text-3xl">{verdict}{config.name ? `, ${config.name}` : ""}</h1>
-          <p className="mt-2 text-sm text-navy-foreground/80">{role} · {config.level} · {config.type.toUpperCase()} · {LANG_NAMES[config.lang]} · {answered.length}/{qids.length} answered</p>
-          <div className="no-print mt-4 flex flex-wrap gap-2">
-            <button onClick={() => window.print()} className="rounded-lg bg-navy-foreground px-4 py-2 text-sm font-semibold text-navy hover:opacity-90">Print / Save PDF</button>
-            <button onClick={download} className="rounded-lg border border-navy-foreground/40 px-4 py-2 text-sm font-medium hover:bg-navy-foreground/10">Download .txt</button>
-            <button onClick={onRetry} className="rounded-lg border border-navy-foreground/40 px-4 py-2 text-sm font-medium hover:bg-navy-foreground/10">New interview</button>
-            <button onClick={onRestart} className="rounded-lg px-4 py-2 text-sm font-medium text-navy-foreground/80 hover:underline">Clear all</button>
+
+        <div className="space-y-2 text-center sm:text-left">
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-navy-foreground/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-navy-foreground/80">
+            <Award className="h-3.5 w-3.5 text-emerald-400" />
+            <span>Automated Technical Screening Report</span>
+          </div>
+
+          <h1 className="text-2xl sm:text-3xl font-bold font-display">
+            {verdict}
+            {config.name ? `, ${config.name}` : ""}
+          </h1>
+
+          <p className="text-xs sm:text-sm text-navy-foreground/80 leading-relaxed">
+            {config.role} · {config.level.toUpperCase()} · {LANG_NAMES[config.lang]} ·{" "}
+            {answeredCount}/{questions.length} Stages Completed
+          </p>
+
+          {/* Action buttons */}
+          <div className="no-print pt-3 flex flex-wrap gap-2 justify-center sm:justify-start">
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="rounded-xl bg-navy-foreground px-4 py-2 text-xs font-semibold text-navy hover:opacity-90 transition flex items-center gap-1.5"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              <span>Print / Save PDF</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadReport}
+              className="rounded-xl border border-navy-foreground/30 px-4 py-2 text-xs font-semibold hover:bg-navy-foreground/10 transition flex items-center gap-1.5"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>Download Report (.txt)</span>
+            </button>
+            <button
+              type="button"
+              onClick={onRetry}
+              className="rounded-xl border border-navy-foreground/30 px-4 py-2 text-xs font-semibold hover:bg-navy-foreground/10 transition"
+            >
+              Practice Again
+            </button>
+            <button
+              type="button"
+              onClick={onRestart}
+              className="rounded-xl px-3 py-2 text-xs font-medium text-navy-foreground/70 hover:underline"
+            >
+              Clear & Restart
+            </button>
           </div>
         </div>
       </section>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <ListCard title="Strengths" tone="success" items={strengths} />
-        <ListCard title="Areas to improve" tone="warning" items={improve} />
+      {/* Metric Breakdown Cards (Quad-metric Rubric) */}
+      <div className="grid gap-4 sm:grid-cols-4">
+        {[
+          {
+            label: "Technical Knowledge",
+            val: avgTechnical,
+            desc: "Accuracy & depth of technical concepts & code",
+          },
+          {
+            label: "Communication",
+            val: avgCommunication,
+            desc: "Clarity, conciseness, and articulation",
+          },
+          {
+            label: "Problem Solving",
+            val: avgProblemSolving,
+            desc: "Algorithmic logic & diagnostic reasoning",
+          },
+          { label: "JD Relevance", val: avgJdRelevance, desc: "Alignment with job requirements" },
+        ].map((metric) => (
+          <div
+            key={metric.label}
+            className="rounded-2xl border border-border bg-card p-4 shadow-xs space-y-1"
+          >
+            <span className="text-xs font-semibold text-muted-foreground block truncate">
+              {metric.label}
+            </span>
+            <div className="flex items-baseline gap-1">
+              <span className="font-display text-2xl font-bold">{metric.val}</span>
+              <span className="text-xs text-muted-foreground">/ 10</span>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-tight">{metric.desc}</p>
+          </div>
+        ))}
       </div>
 
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">Question breakdown</h2>
-        {qids.map((id, i) => {
-          const r = responses.find((x) => x.qid === id);
-          const sc = r?.evaluation.score ?? 0;
-          return (
-            <article key={id} className="print-card rounded-2xl border bg-card p-5 shadow-soft">
-              <div className="flex items-start justify-between gap-4">
-                <h3 className="font-sans text-sm font-semibold sm:text-base" lang={config.lang}>Q{i + 1}. {qt(id, config.lang)}</h3>
-                <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-xs font-bold", sc >= 7 ? "bg-success/15 text-success" : sc >= 4 ? "bg-warning/15 text-warning" : "bg-destructive/10 text-destructive")}>{sc}/10</span>
+      {/* Resume-to-JD Skill Matrix (If documents were analyzed) */}
+      {config.analysis && (
+        <section className="rounded-2xl border border-border bg-card p-5 shadow-xs space-y-3">
+          <div className="flex items-center gap-2">
+            <BookOpen className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-foreground">
+              Resume-to-JD Skill Alignment Matrix
+            </h2>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3 text-xs">
+            <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3">
+              <span className="font-semibold text-emerald-500 block mb-1">
+                Matched Strengths ({config.analysis.matchedSkills.length})
+              </span>
+              <p className="text-muted-foreground text-[11px] leading-relaxed">
+                {config.analysis.matchedSkills.join(", ") || "Foundational concepts aligned"}
+              </p>
+            </div>
+            <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3">
+              <span className="font-semibold text-amber-500 block mb-1">
+                Candidate Skills ({config.analysis.candidateSkills.length})
+              </span>
+              <p className="text-muted-foreground text-[11px] leading-relaxed">
+                {config.analysis.candidateSkills.join(", ") || "Software development basics"}
+              </p>
+            </div>
+            <div className="rounded-xl bg-violet/10 border border-violet/20 p-3">
+              <span className="font-semibold text-violet block mb-1">
+                JD Growth Areas ({config.analysis.gapSkills.length})
+              </span>
+              <p className="text-muted-foreground text-[11px] leading-relaxed">
+                {config.analysis.gapSkills.join(", ") || "Advanced system scalability"}
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Stage-by-Stage Breakdown */}
+      <section className="rounded-2xl border border-border bg-card p-6 shadow-xs space-y-4">
+        <h2 className="text-base font-bold font-display">
+          Stage-by-Stage Performance & Coaching Breakdown
+        </h2>
+
+        <div className="space-y-4">
+          {responses.map((resp, i) => (
+            <div
+              key={resp.qid || i}
+              className="rounded-2xl border border-border bg-muted/20 p-5 space-y-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/80 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-lg bg-primary/10 px-2.5 py-0.5 text-xs font-bold text-primary">
+                    Stage {resp.stageNumber ?? i + 1} · {resp.category.replace("_", " ")}
+                  </span>
+                  <span className="text-xs text-muted-foreground">Time: {resp.timeSpentSec}s</span>
+                </div>
+                <div className="flex items-center gap-1.5 font-display text-sm font-bold">
+                  <span>Score:</span>
+                  <span
+                    className={cn(
+                      resp.evaluation.score >= 7.5
+                        ? "text-emerald-500"
+                        : resp.evaluation.score >= 5.5
+                          ? "text-amber-500"
+                          : "text-rose-500",
+                    )}
+                  >
+                    {resp.evaluation.score} / 10
+                  </span>
+                </div>
               </div>
-              <p className="mt-2 whitespace-pre-wrap rounded-lg bg-muted p-3 text-sm text-muted-foreground">{r ? r.answer || "Skipped" : "Not reached"}</p>
-              {r && <p className="mt-2 text-sm leading-relaxed">{r.evaluation.feedback}</p>}
-              {r && r.evaluation.matched.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">{r.evaluation.matched.map((m) => <span key={m} className="rounded bg-accent px-1.5 py-0.5 text-xs text-accent-foreground">{m}</span>)}</div>
-              )}
-            </article>
-          );
-        })}
+
+              <div>
+                <p className="text-xs font-semibold text-foreground">{resp.questionText}</p>
+                <div className="mt-2 rounded-xl bg-card p-3 border border-border text-xs text-muted-foreground space-y-1">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-foreground block">
+                    Candidate Response:
+                  </span>
+                  <p className="whitespace-pre-wrap leading-relaxed">
+                    {resp.answer || "(No response recorded)"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Coaching Feedback */}
+              <div className="grid gap-2 sm:grid-cols-2 text-xs pt-1">
+                <div className="rounded-xl bg-card p-3 border border-border/80">
+                  <span className="font-semibold text-emerald-500 block mb-1">
+                    ✓ Identified Strengths
+                  </span>
+                  <ul className="list-disc list-inside text-muted-foreground text-[11px] space-y-0.5">
+                    {resp.evaluation.strengths.map((s, idx) => (
+                      <li key={idx}>{s}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="rounded-xl bg-card p-3 border border-border/80">
+                  <span className="font-semibold text-amber-500 block mb-1">
+                    ↗ Coaching Recommendation
+                  </span>
+                  <p className="text-muted-foreground text-[11px] leading-relaxed">
+                    {resp.evaluation.coachingFeedback}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
-      <p className="text-xs text-muted-foreground">Scores are generated locally from answer completeness and keyword relevance — a practice indicator, not a hiring assessment.</p>
-    </div>
-  );
-}
-
-function qt(id: string, lang: Lang = "en") { const q = BANK.find((b) => b.id === id); return q ? questionText(q, lang).text : id; }
-
-function ListCard({ title, items, tone }: { title: string; items: string[]; tone: "success" | "warning" }) {
-  return (
-    <div className="print-card rounded-2xl border bg-card p-5 shadow-soft">
-      <h2 className={cn("text-base font-semibold", tone === "success" ? "text-success" : "text-warning")}>{title}</h2>
-      <ul className="mt-2 space-y-1.5 text-sm">{items.map((x) => <li key={x} className="flex gap-2"><span aria-hidden>{tone === "success" ? "✓" : "→"}</span>{x}</li>)}</ul>
     </div>
   );
 }

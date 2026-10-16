@@ -1,0 +1,5 @@
+{
+  "name": "InterviewMate AI",
+  "description": "Voice mock interview practice inspired by HCLTech interview bot with realistic interviewer avatar, multilingual support, and Resume + Job Description personalized evaluation.",
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
